@@ -13,6 +13,7 @@ supporting data to `/results`.
 | Resource | Description |
 | --- | --- |
 | [Figures repository](https://github.com/AllenNeuralDynamics/LCNE-patchseq-figures) | This capsule's code, environment, metadata, and frozen inputs |
+| [Code Ocean capsule](https://codeocean.allenneuraldynamics.org/capsule/9190472/tree) | Reproducible environment and run interface for figure S14j/k |
 | [DANDIset 001893](https://dandiarchive.org/dandiset/001893/) | Raw intracellular current-clamp NWB recordings |
 | [NeMO collection](https://assets.nemoarchive.org/col-p9d5w39) | Associated publication data collection |
 | [Analysis repository](https://github.com/AllenNeuralDynamics/LCNE-patchseq-analysis) | Original multimodal analysis and metadata-export code |
@@ -88,11 +89,12 @@ It processes cells concurrently and performs the following steps:
 
 ## Reproducible run
 
-In Code Ocean, **Reproducible Run** executes [`code/run`](code/run). The run
-downloads or reuses all 96 NWBs, computes cells in parallel, and writes to
-`/results`. In the Reproducible Run arguments field, use `--workers 4` to choose
-four worker processes. The default is the smaller of eight workers or the
-available CPU count; choosing more workers than available CPUs is not useful.
+In the [Code Ocean capsule](https://codeocean.allenneuraldynamics.org/capsule/9190472/tree),
+**Reproducible Run** executes [`code/run`](code/run). The run downloads or
+reuses all 96 NWBs, computes cells in parallel, and writes to `/results`. In the
+Reproducible Run arguments field, use `--workers 4` to choose four worker
+processes. The default is the smaller of eight workers or the available CPU
+count; choosing more workers than available CPUs is not useful.
 
 The same command can be run from the repository root:
 
