@@ -7,6 +7,7 @@ import numpy as np
 
 from spike_waveforms import (
     detect_efel_peak_indices,
+    detect_efel_peak_times,
     extract_representative_spike,
     infer_main_stimulus_pulse,
 )
@@ -24,6 +25,11 @@ class SpikeWaveformsTest(unittest.TestCase):
         pulse = infer_main_stimulus_pulse(stimulus)
         self.assertEqual((pulse.start_index, pulse.stop_index), (25, 85))
         self.assertEqual(pulse.amplitude_pa, 20)
+
+    def test_peak_times_use_legacy_interpolated_grid(self):
+        voltage = np.full(1000, -70.0)
+        voltage[499:502] = [-20.0, 30.0, -20.0]
+        np.testing.assert_allclose(detect_efel_peak_times(voltage, 50_000.0), [10.0])
 
     def test_selects_lowest_amplitude_spiking_rheobase_and_averages_spikes(self):
         with tempfile.TemporaryDirectory() as directory:

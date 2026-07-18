@@ -1,13 +1,34 @@
 import unittest
+import csv
 from io import BytesIO
 import hashlib
 from pathlib import Path
 import tempfile
 
-from dandi_assets import DandiNWBAsset, download_nwb_asset, resolve_nwb_assets
+from dandi_assets import (
+    DEFAULT_MANIFEST,
+    DandiNWBAsset,
+    download_nwb_asset,
+    resolve_manifest_assets,
+    resolve_nwb_assets,
+)
 
 
 class ResolveNWBAssetsTest(unittest.TestCase):
+    def test_committed_manifest_pins_all_publication_cells(self):
+        frozen_table = DEFAULT_MANIFEST.with_name("AIBS_spreadsheet_pub.csv")
+        with frozen_table.open(newline="") as stream:
+            ephys_roi_ids = [row["ephys_roi_id"] for row in csv.DictReader(stream)]
+        resolved = resolve_manifest_assets(ephys_roi_ids, DEFAULT_MANIFEST)
+
+        self.assertEqual(len(resolved), 96)
+        self.assertEqual(sum(asset.size for asset in resolved.values()), 5_671_769_779)
+        self.assertEqual(resolved["1388239233"].size, 62_569_344)
+        self.assertEqual(
+            resolved["1388239233"].sha256,
+            "55609608e1736f8f2f4e459663e83f3b01faf969cd20bdec0ee0e3929416b8fa",
+        )
+
     def test_resolves_requested_ids_across_pages(self):
         pages = {
             "first": {

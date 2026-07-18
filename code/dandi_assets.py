@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import csv
 import hashlib
 import json
 from pathlib import Path
@@ -13,6 +14,7 @@ from urllib.request import urlopen
 DANDI_API = "https://api.dandiarchive.org/api"
 DANDISET_ID = "001893"
 DANDI_VERSION = "draft"
+DEFAULT_MANIFEST = Path(__file__).resolve().with_name("dandi_001893_manifest.csv")
 
 ROI_ID_PATTERN = re.compile(r"_ses-(\d+)_icephys\.nwb$")
 
@@ -25,6 +27,8 @@ class DandiNWBAsset:
     asset_id: str
     path: str
     size: int
+    sha256: str | None = None
+    content_url: str | None = None
 
 
 def _get_json(url: str) -> dict:
@@ -89,6 +93,41 @@ def resolve_nwb_assets(
     return {ephys_roi_id: assets[0] for ephys_roi_id, assets in matches.items()}
 
 
+def resolve_manifest_assets(
+    ephys_roi_ids: Iterable[str],
+    manifest_path: Path = DEFAULT_MANIFEST,
+) -> dict[str, DandiNWBAsset]:
+    """Resolve requested ROI IDs from the committed immutable asset manifest."""
+    requested = {str(ephys_roi_id) for ephys_roi_id in ephys_roi_ids}
+    matches: dict[str, list[DandiNWBAsset]] = {ephys_roi_id: [] for ephys_roi_id in requested}
+    with manifest_path.open(newline="") as stream:
+        for row in csv.DictReader(stream):
+            ephys_roi_id = row["ephys_roi_id"]
+            if ephys_roi_id not in requested:
+                continue
+            matches[ephys_roi_id].append(
+                DandiNWBAsset(
+                    ephys_roi_id=ephys_roi_id,
+                    asset_id=row["asset_id"],
+                    path=row["path"],
+                    size=int(row["size"]),
+                    sha256=row["sha256"],
+                    content_url=row["content_url"],
+                )
+            )
+
+    missing = sorted(ephys_roi_id for ephys_roi_id, assets in matches.items() if not assets)
+    ambiguous = sorted(ephys_roi_id for ephys_roi_id, assets in matches.items() if len(assets) > 1)
+    if missing or ambiguous:
+        details = []
+        if missing:
+            details.append(f"missing: {', '.join(missing)}")
+        if ambiguous:
+            details.append(f"ambiguous: {', '.join(ambiguous)}")
+        raise ValueError("Could not uniquely resolve manifest NWBs (" + "; ".join(details) + ")")
+    return {ephys_roi_id: assets[0] for ephys_roi_id, assets in matches.items()}
+
+
 def download_nwb_asset(
     asset: DandiNWBAsset,
     cache_dir: Path,
@@ -97,16 +136,22 @@ def download_nwb_asset(
     open_url=urlopen,
 ) -> Path:
     """Download an NWB to a cache and verify its DANDI SHA-256 digest."""
-    details = get_json(f"{DANDI_API}/assets/{asset.asset_id}/")
-    expected_digest = details.get("digest", {}).get("dandi:sha2-256")
+    details = None
+    expected_digest = asset.sha256
+    download_url = asset.content_url
+    if not expected_digest or not download_url:
+        details = get_json(f"{DANDI_API}/assets/{asset.asset_id}/")
+    if not expected_digest:
+        expected_digest = details.get("digest", {}).get("dandi:sha2-256")
     if not expected_digest:
         raise ValueError(f"DANDI asset has no SHA-256 digest: {asset.asset_id}")
 
-    content_urls = details.get("contentUrl", [])
-    download_url = next(
-        (url for url in content_urls if "dandiarchive.s3.amazonaws.com" in url),
-        content_urls[0] if content_urls else None,
-    )
+    if not download_url:
+        content_urls = details.get("contentUrl", [])
+        download_url = next(
+            (url for url in content_urls if "dandiarchive.s3.amazonaws.com" in url),
+            content_urls[0] if content_urls else None,
+        )
     if not download_url:
         raise ValueError(f"DANDI asset has no content URL: {asset.asset_id}")
 

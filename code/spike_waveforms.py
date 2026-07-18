@@ -9,7 +9,7 @@ import numpy as np
 
 from nwb_sweeps import CurrentClampSweep, list_current_clamp_sweeps, load_current_clamp_sweep
 
-LONG_SQUARE_RHEO = "X3LP_Rheo_DA_0"
+LONG_SQUARE_RHEO_LABELS = ("X3LP_Rheo_DA_0", "X5LP_Rheo_DA_0")
 LEGACY_SAMPLING_RATE_HZ = 50_000.0
 SPIKE_THRESHOLD_MV = -10.0
 SPIKE_WINDOW_MS = (-5.0, 10.0)
@@ -92,6 +92,30 @@ def detect_efel_peak_indices(
     return np.asarray(peaks, dtype=int)
 
 
+def detect_efel_peak_times(
+    voltage_mv: np.ndarray,
+    sampling_rate_hz: float,
+    threshold_mv: float = SPIKE_THRESHOLD_MV,
+) -> np.ndarray:
+    """Interpolate as eFEL does and return peak times in milliseconds."""
+    step_ms = 1000.0 / sampling_rate_hz
+    raw_time_ms = np.arange(len(voltage_mv)) * step_ms
+    interpolated_size = int(np.ceil(raw_time_ms[-1] / step_ms))
+    increments = np.full(interpolated_size, step_ms)
+    increments[0] = 0.0
+    interpolated_time_ms = np.cumsum(increments)
+    next_time = interpolated_time_ms[-1] + step_ms
+    if interpolated_time_ms[-1] < raw_time_ms[-1]:
+        interpolated_time_ms = np.append(interpolated_time_ms, next_time)
+    interpolated_voltage_mv = np.interp(
+        interpolated_time_ms,
+        raw_time_ms,
+        np.asarray(voltage_mv, dtype=float),
+    )
+    peak_indices = detect_efel_peak_indices(interpolated_voltage_mv, threshold_mv)
+    return interpolated_time_ms[peak_indices]
+
+
 def _candidate_rheobase_sweep(sweep: CurrentClampSweep) -> tuple[StimulusPulse, np.ndarray] | None:
     if sweep.sampling_rate_hz != LEGACY_SAMPLING_RATE_HZ:
         raise ValueError(
@@ -101,20 +125,22 @@ def _candidate_rheobase_sweep(sweep: CurrentClampSweep) -> tuple[StimulusPulse, 
     pulse = infer_main_stimulus_pulse(sweep.stimulus_pa)
     if pulse.sample_count < 0.8 * sweep.sampling_rate_hz:
         return None
-    peaks = detect_efel_peak_indices(sweep.voltage_mv)
-    peaks_during_pulse = peaks[
-        (peaks >= pulse.start_index) & (peaks < pulse.stop_index)
+    peak_times_ms = detect_efel_peak_times(sweep.voltage_mv, sweep.sampling_rate_hz)
+    pulse_start_ms = pulse.start_index * 1000.0 / sweep.sampling_rate_hz
+    pulse_stop_ms = pulse.stop_index * 1000.0 / sweep.sampling_rate_hz
+    peaks_during_pulse = peak_times_ms[
+        (peak_times_ms >= pulse_start_ms) & (peak_times_ms < pulse_stop_ms)
     ]
     if not len(peaks_during_pulse):
         return None
-    return pulse, peaks
+    return pulse, peak_times_ms
 
 
 def extract_representative_spike(path: Path) -> RepresentativeSpike:
     """Reproduce the legacy ``long_square_rheo, min`` average waveform."""
     candidates = []
     for sweep_number, description in sorted(list_current_clamp_sweeps(path).items()):
-        if description != LONG_SQUARE_RHEO:
+        if description not in LONG_SQUARE_RHEO_LABELS:
             continue
         sweep = load_current_clamp_sweep(path, sweep_number)
         candidate = _candidate_rheobase_sweep(sweep)
@@ -122,16 +148,20 @@ def extract_representative_spike(path: Path) -> RepresentativeSpike:
             pulse, peaks = candidate
             candidates.append((abs(pulse.amplitude_pa), sweep_number, pulse, peaks, sweep))
     if not candidates:
-        raise ValueError(f"No spiking {LONG_SQUARE_RHEO} sweep found in {path}")
+        raise ValueError(f"No spiking long-square rheobase sweep found in {path}")
 
-    _, sweep_number, pulse, peaks, sweep = min(candidates, key=lambda item: (item[0], item[1]))
+    _, sweep_number, pulse, _, sweep = min(candidates, key=lambda item: (item[0], item[1]))
+    peak_times_ms = detect_efel_peak_times(sweep.voltage_mv, sweep.sampling_rate_hz)
     before = round(abs(SPIKE_WINDOW_MS[0]) * sweep.sampling_rate_hz / 1000.0)
     after = round(SPIKE_WINDOW_MS[1] * sweep.sampling_rate_hz / 1000.0)
-    waveforms = [
-        sweep.voltage_mv[peak - before : peak + after]
-        for peak in peaks
-        if peak >= before and peak + after <= len(sweep.voltage_mv)
-    ]
+    raw_time_ms = np.arange(len(sweep.voltage_mv)) * 1000.0 / sweep.sampling_rate_hz
+    waveforms = []
+    for peak_time_ms in peak_times_ms:
+        indices = np.flatnonzero(
+            (raw_time_ms >= peak_time_ms + SPIKE_WINDOW_MS[0])
+            & (raw_time_ms < peak_time_ms + SPIKE_WINDOW_MS[1])
+        )
+        waveforms.append(sweep.voltage_mv[indices])
     expected_samples = before + after
     waveforms = [waveform for waveform in waveforms if len(waveform) == expected_samples]
     if not waveforms:
@@ -147,7 +177,7 @@ def extract_representative_spike(path: Path) -> RepresentativeSpike:
     return RepresentativeSpike(
         sweep_number=sweep_number,
         stimulus_amplitude_pa=pulse.amplitude_pa,
-        peak_indices=peaks,
+        peak_indices=np.searchsorted(raw_time_ms, peak_times_ms),
         time_ms=time_ms,
         waveform_mv=np.mean(waveforms, axis=0),
     )

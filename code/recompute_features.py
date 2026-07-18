@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from dandi_assets import DandiNWBAsset, download_nwb_asset, resolve_nwb_assets
+from dandi_assets import DandiNWBAsset, download_nwb_asset, resolve_manifest_assets
 from spike_pca import compute_spike_pc1, representative_waveform_frame
 from spike_waveforms import RepresentativeSpike, extract_representative_spike
 
@@ -30,7 +30,7 @@ def recompute_spike_features(
     frame: pd.DataFrame,
     cache_dir: Path,
     *,
-    resolve_assets: Callable = resolve_nwb_assets,
+    resolve_assets: Callable = resolve_manifest_assets,
     download_asset: Callable = download_nwb_asset,
     extract_spike: Callable = extract_representative_spike,
 ) -> RecomputedFeatures:
@@ -52,6 +52,7 @@ def recompute_spike_features(
                 "dandi_asset_id": asset.asset_id,
                 "dandi_asset_path": asset.path,
                 "dandi_asset_size_bytes": asset.size,
+                "dandi_asset_sha256": asset.sha256,
                 "selected_sweep_number": representative.sweep_number,
                 "stimulus_amplitude_pa": representative.stimulus_amplitude_pa,
                 "spike_count": len(representative.peak_indices),
