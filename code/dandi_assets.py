@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import hashlib
 import json
+from pathlib import Path
 import re
 from typing import Callable, Iterable
 from urllib.request import urlopen
@@ -28,6 +30,14 @@ class DandiNWBAsset:
 def _get_json(url: str) -> dict:
     with urlopen(url, timeout=120) as response:
         return json.load(response)
+
+
+def _sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as stream:
+        for block in iter(lambda: stream.read(1024 * 1024), b""):
+            digest.update(block)
+    return digest.hexdigest()
 
 
 def resolve_nwb_assets(
@@ -77,3 +87,46 @@ def resolve_nwb_assets(
         raise ValueError("Could not uniquely resolve DANDI NWB assets (" + "; ".join(details) + ")")
 
     return {ephys_roi_id: assets[0] for ephys_roi_id, assets in matches.items()}
+
+
+def download_nwb_asset(
+    asset: DandiNWBAsset,
+    cache_dir: Path,
+    *,
+    get_json: Callable[[str], dict] = _get_json,
+    open_url=urlopen,
+) -> Path:
+    """Download an NWB to a cache and verify its DANDI SHA-256 digest."""
+    details = get_json(f"{DANDI_API}/assets/{asset.asset_id}/")
+    expected_digest = details.get("digest", {}).get("dandi:sha2-256")
+    if not expected_digest:
+        raise ValueError(f"DANDI asset has no SHA-256 digest: {asset.asset_id}")
+
+    content_urls = details.get("contentUrl", [])
+    download_url = next(
+        (url for url in content_urls if "dandiarchive.s3.amazonaws.com" in url),
+        content_urls[0] if content_urls else None,
+    )
+    if not download_url:
+        raise ValueError(f"DANDI asset has no content URL: {asset.asset_id}")
+
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    destination = cache_dir / f"{asset.ephys_roi_id}.nwb"
+    if destination.exists() and _sha256(destination) == expected_digest:
+        return destination
+
+    temporary = destination.with_suffix(".nwb.part")
+    try:
+        with open_url(download_url, timeout=300) as response, temporary.open("wb") as stream:
+            while block := response.read(1024 * 1024):
+                stream.write(block)
+        actual_digest = _sha256(temporary)
+        if actual_digest != expected_digest:
+            raise ValueError(
+                f"SHA-256 mismatch for {asset.ephys_roi_id}: "
+                f"expected {expected_digest}, got {actual_digest}"
+            )
+        temporary.replace(destination)
+    finally:
+        temporary.unlink(missing_ok=True)
+    return destination

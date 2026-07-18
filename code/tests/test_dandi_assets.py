@@ -1,6 +1,10 @@
 import unittest
+from io import BytesIO
+import hashlib
+from pathlib import Path
+import tempfile
 
-from dandi_assets import DandiNWBAsset, resolve_nwb_assets
+from dandi_assets import DandiNWBAsset, download_nwb_asset, resolve_nwb_assets
 
 
 class ResolveNWBAssetsTest(unittest.TestCase):
@@ -65,6 +69,38 @@ class ResolveNWBAssetsTest(unittest.TestCase):
 
         with self.assertRaisesRegex(ValueError, r"missing: 222; ambiguous: 111"):
             resolve_nwb_assets(["111", "222"], get_json=lambda _url: page)
+
+    def test_download_verifies_and_reuses_cached_asset(self):
+        content = b"example nwb bytes"
+        digest = hashlib.sha256(content).hexdigest()
+        calls = []
+
+        def open_url(url, timeout):
+            calls.append((url, timeout))
+            return BytesIO(content)
+
+        details = {
+            "contentUrl": ["https://dandiarchive.s3.amazonaws.com/blobs/example"],
+            "digest": {"dandi:sha2-256": digest},
+        }
+        asset = DandiNWBAsset("111", "asset-a", "sub-1_ses-111_icephys.nwb", len(content))
+        with tempfile.TemporaryDirectory() as directory:
+            path = download_nwb_asset(
+                asset,
+                Path(directory),
+                get_json=lambda _url: details,
+                open_url=open_url,
+            )
+            cached = download_nwb_asset(
+                asset,
+                Path(directory),
+                get_json=lambda _url: details,
+                open_url=open_url,
+            )
+
+            self.assertEqual(path.read_bytes(), content)
+            self.assertEqual(cached, path)
+            self.assertEqual(len(calls), 1)
 
 
 if __name__ == "__main__":
