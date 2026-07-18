@@ -29,7 +29,7 @@ from spikes import compute_pc1, extract_representative_spike, waveform_frame
 LOGGER = logging.getLogger(__name__)
 
 ROOT = Path(__file__).resolve().parent
-DEFAULT_INPUT = ROOT / "data" / "AIBS_spreadsheet_pub.csv"
+DEFAULT_INPUT = ROOT / "data" / "LCNE_patchseq_S14_cell_table.csv"
 DEFAULT_OUTPUT = ROOT.parent / "results"
 DEFAULT_CACHE = Path(os.environ.get("DANDI_NWB_CACHE", "/scratch/lcne-patchseq-nwb"))
 DEFAULT_WORKERS = min(8, os.cpu_count() or 1)
@@ -297,7 +297,7 @@ def main() -> None:
     trace_path = args.output_dir / "S14j_example_traces.csv"
     example_trace_frame(example_trace_sets).to_csv(trace_path, index=False)
     LOGGER.info("Wrote %s", trace_path)
-    metadata_path = args.output_dir / "AIBS_spreadsheet_pub.csv"
+    metadata_path = args.output_dir / "LCNE_patchseq_S14_cell_table.csv"
     frame.to_csv(metadata_path, index=False)
     LOGGER.info("Wrote %s", metadata_path)
     for path in generate_figure(frame, args.output_dir, example_trace_sets):

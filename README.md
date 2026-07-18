@@ -16,7 +16,7 @@ parallel. Set `--workers` when running the Python script to override the default
 of up to eight worker processes.
 
 The input metadata has no `spike_waveform_PC1` column. The output
-`/results/AIBS_spreadsheet_pub.csv` adds that newly computed column while
+`/results/LCNE_patchseq_S14_cell_table.csv` adds that newly computed column while
 retaining all input metadata columns.
 
 The run also writes selected sweep and DANDI asset provenance, representative
@@ -41,7 +41,7 @@ By default, the command reads the bundled CSV and writes PNG, SVG, and four
 underlying-data CSV files to `results/`. Paths can be overridden:
 
 ```bash
-python code/generate_S14jk.py --input path/to/AIBS_spreadsheet_pub.csv --output-dir path/to/results
+python code/generate_S14jk.py --input path/to/LCNE_patchseq_S14_cell_table.csv --output-dir path/to/results
 ```
 
 The frozen table was exported from the analysis underlying the LCNE patch-seq

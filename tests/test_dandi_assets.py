@@ -6,7 +6,7 @@ from dandi import MANIFEST, load_assets
 
 class ResolveNWBAssetsTest(unittest.TestCase):
     def test_committed_manifest_pins_all_publication_cells(self):
-        frozen_table = MANIFEST.with_name("AIBS_spreadsheet_pub.csv")
+        frozen_table = MANIFEST.with_name("LCNE_patchseq_S14_cell_table.csv")
         with frozen_table.open(newline="") as stream:
             ephys_roi_ids = [row["ephys_roi_id"] for row in csv.DictReader(stream)]
         resolved = load_assets(ephys_roi_ids)

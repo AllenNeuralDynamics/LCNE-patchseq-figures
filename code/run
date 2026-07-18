@@ -5,5 +5,5 @@ CODE_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 RESULTS_DIR="$(cd -- "$CODE_DIR/.." && pwd)/results"
 
 python -u "$CODE_DIR/generate_S14jk.py" \
-    --input "$CODE_DIR/data/AIBS_spreadsheet_pub.csv" \
+    --input "$CODE_DIR/data/LCNE_patchseq_S14_cell_table.csv" \
     --output-dir "$RESULTS_DIR"
