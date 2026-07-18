@@ -10,7 +10,6 @@ from generate_S14jk import (
     DEFAULT_INPUT,
     generate_figure,
     load_frozen_table,
-    write_pc1_comparison_figure,
 )
 
 
@@ -23,9 +22,16 @@ class GenerateS14Test(unittest.TestCase):
             frame["projection_target"].value_counts().to_dict(),
             {"Spinal cord": 54, "Cortex": 27, "Cerebellum": 15},
         )
+        self.assertNotIn("spike_waveform_PC1", frame.columns)
+        frame["spike_waveform_PC1"] = np.linspace(-2, 2, len(frame))
 
         with tempfile.TemporaryDirectory() as directory:
-            outputs = generate_figure(frame, Path(directory))
+            trace = type("Trace", (), {"time_ms": np.arange(10), "voltage_mv": np.arange(10)})
+            traces = {
+                ephys_roi_id: {"hyperpol": trace, "rheo": trace, "supra": trace}
+                for ephys_roi_id in ("1388239233", "1426757704", "1410640556")
+            }
+            outputs = generate_figure(frame, Path(directory), traces)
             self.assertEqual(len(outputs), 6)
             self.assertTrue(all(path.exists() and path.stat().st_size > 0 for path in outputs))
             self.assertEqual(mpimg.imread(Path(directory) / "S14jk.png").shape[:2], (1350, 4800))
@@ -33,18 +39,6 @@ class GenerateS14Test(unittest.TestCase):
             pc1 = pd.read_csv(Path(directory) / "S14jk_PC1_cumulative.csv")
             endpoints = pc1.groupby("projection_target")["cumulative_fraction"].max()
             self.assertTrue((endpoints == 1.0).all())
-
-            comparison = pd.DataFrame(
-                {
-                    "projection_target": np.repeat(
-                        ["Spinal cord", "Cortex", "Cerebellum"], 3
-                    ),
-                    "spike_waveform_PC1_frozen": np.arange(9),
-                    "spike_waveform_PC1_recomputed": np.arange(9) + 0.01,
-                }
-            )
-            comparison_outputs = write_pc1_comparison_figure(comparison, Path(directory))
-            self.assertTrue(all(path.stat().st_size > 0 for path in comparison_outputs))
 
     def test_missing_required_column_is_rejected(self):
         with tempfile.TemporaryDirectory() as directory:

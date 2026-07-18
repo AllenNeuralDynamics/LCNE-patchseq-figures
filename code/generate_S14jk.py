@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+from concurrent.futures import ProcessPoolExecutor
 import logging
 import os
 from pathlib import Path
@@ -31,12 +32,12 @@ ROOT = Path(__file__).resolve().parent
 DEFAULT_INPUT = ROOT / "data" / "AIBS_spreadsheet_pub.csv"
 DEFAULT_OUTPUT = ROOT.parent / "results"
 DEFAULT_CACHE = Path(os.environ.get("DANDI_NWB_CACHE", "/scratch/lcne-patchseq-nwb"))
+DEFAULT_WORKERS = min(8, os.cpu_count() or 1)
 
 REQUIRED_COLUMNS = {
     "ephys_roi_id",
     "Donor",
     "projection_target",
-    "spike_waveform_PC1",
     "membrane_time_constant_ms",
 }
 
@@ -61,25 +62,30 @@ def load_frozen_table(path: Path) -> pd.DataFrame:
 
     frame = frame.copy()
     frame["ephys_roi_id"] = frame["ephys_roi_id"].astype(str)
-    for column in ("spike_waveform_PC1", "membrane_time_constant_ms"):
-        converted = pd.to_numeric(frame[column], errors="coerce")
-        invalid = frame[column].notna() & converted.isna()
-        if invalid.any():
-            raise ValueError(f"Column {column} contains non-numeric values")
-        frame[column] = converted
+    frame["membrane_time_constant_ms"] = pd.to_numeric(
+        frame["membrane_time_constant_ms"], errors="raise"
+    )
     return frame
 
 
-def recompute_features(frame: pd.DataFrame, cache_dir: Path):
+def _extract_cell(task):
+    ephys_roi_id, asset, cache_dir = task
+    spike = extract_representative_spike(download_nwb(asset, cache_dir))
+    return ephys_roi_id, spike
+
+
+def recompute_features(frame: pd.DataFrame, cache_dir: Path, workers: int):
     ephys_roi_ids = frame["ephys_roi_id"].tolist()
     assets = load_assets(ephys_roi_ids)
-    representatives = {}
+    tasks = [(ephys_roi_id, assets[ephys_roi_id], cache_dir) for ephys_roi_id in ephys_roi_ids]
+    with ProcessPoolExecutor(max_workers=workers) as pool:
+        representatives = dict(pool.map(_extract_cell, tasks))
+
     provenance = []
     for position, ephys_roi_id in enumerate(ephys_roi_ids, start=1):
-        LOGGER.info("Recomputing %s (%d/%d)", ephys_roi_id, position, len(ephys_roi_ids))
         asset = assets[ephys_roi_id]
-        spike = extract_representative_spike(download_nwb(asset, cache_dir))
-        representatives[ephys_roi_id] = spike
+        spike = representatives[ephys_roi_id]
+        LOGGER.info("Recomputed %s (%d/%d)", ephys_roi_id, position, len(ephys_roi_ids))
         provenance.append(
             {
                 "ephys_roi_id": ephys_roi_id,
@@ -95,21 +101,9 @@ def recompute_features(frame: pd.DataFrame, cache_dir: Path):
 
     waveforms = waveform_frame(representatives)
     recomputed_pc1 = compute_pc1(waveforms)
-    frozen_pc1 = frame.set_index("ephys_roi_id")["spike_waveform_PC1"]
-    comparison = pd.DataFrame(
-        {
-            "projection_target": frame.set_index("ephys_roi_id")["projection_target"],
-            "spike_waveform_PC1_frozen": frozen_pc1,
-            "spike_waveform_PC1_recomputed": recomputed_pc1,
-        }
-    )
-    comparison["difference"] = (
-        comparison["spike_waveform_PC1_recomputed"]
-        - comparison["spike_waveform_PC1_frozen"]
-    )
     updated = frame.set_index("ephys_roi_id")
     updated["spike_waveform_PC1"] = recomputed_pc1
-    return updated.reset_index(), comparison, pd.DataFrame(provenance), waveforms
+    return updated.reset_index(), pd.DataFrame(provenance), waveforms
 
 
 def _group_values(frame: pd.DataFrame, column: str):
@@ -161,41 +155,6 @@ def _cumulative_data(groups, value_column: str) -> pd.DataFrame:
             )
         )
     return pd.concat(tables, ignore_index=True)
-
-
-def write_pc1_comparison_figure(comparison: pd.DataFrame, output_dir: Path) -> list[Path]:
-    figure, axes = plt.subplots(1, 3, figsize=(12, 3.6), sharey=True)
-    for axis, (projection_target, color) in zip(axes, GROUPS):
-        group = comparison.loc[comparison["projection_target"] == projection_target]
-        for column, linestyle, label in (
-            ("spike_waveform_PC1_frozen", "-", "Frozen"),
-            ("spike_waveform_PC1_recomputed", "--", "Recomputed"),
-        ):
-            values = np.sort(group[column].to_numpy(dtype=float))
-            fractions = np.arange(1, len(values) + 1) / len(values)
-            axis.step(
-                values,
-                fractions,
-                where="post",
-                color=color,
-                linestyle=linestyle,
-                linewidth=2,
-                label=label,
-            )
-        axis.set(title=projection_target, xlabel="PC1", ylim=(0, 1))
-        axis.spines[["top", "right"]].set_visible(False)
-        axis.legend(frameon=False)
-    axes[0].set_ylabel("Cumulative fraction")
-    figure.suptitle("Frozen and recomputed spike-waveform PC1", fontsize=13)
-    figure.tight_layout()
-    paths = [
-        output_dir / "S14k_PC1_frozen_vs_recomputed.png",
-        output_dir / "S14k_PC1_frozen_vs_recomputed.svg",
-    ]
-    for path in paths:
-        figure.savefig(path, dpi=300)
-    plt.close(figure)
-    return paths
 
 
 def _add_scale_bar(ax, x_ms=200, y_mv=50, x0=0.02, y0=0.05) -> None:
@@ -271,34 +230,7 @@ def generate_figure(
     figure.subplots_adjust(left=0.04, right=0.98, bottom=0.18, top=0.84, wspace=0.24)
     grid = figure.add_gridspec(1, 2, width_ratios=(3, 2))
 
-    if example_trace_sets is None:
-        placeholder = figure.add_subplot(grid[0])
-        placeholder.set_facecolor("#f4f4f2")
-        placeholder.text(
-            0.5,
-            0.55,
-            "Example voltage traces are not available\nin the frozen publication CSV",
-            ha="center",
-            va="center",
-            fontsize=14,
-        )
-        placeholder.text(
-            0.5,
-            0.37,
-            "Run with recompute features = 1 to restore panel j from DANDI.",
-            ha="center",
-            va="center",
-            color="#555555",
-        )
-        placeholder.set(xticks=[], yticks=[])
-        for spine in placeholder.spines.values():
-            spine.set_visible(False)
-        placeholder.set_title("LC-NE projections to:", fontstyle="italic")
-        placeholder.annotate(
-            "j", xy=(0, 1.02), xycoords="axes fraction", fontsize=18, fontweight="bold"
-        )
-    else:
-        _plot_example_panel(figure, grid[0], example_trace_sets)
+    _plot_example_panel(figure, grid[0], example_trace_sets)
 
     cdf_grid = grid[1].subgridspec(1, 2, wspace=0.38)
     pc1_axis = figure.add_subplot(cdf_grid[0])
@@ -340,14 +272,8 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--input", type=Path, default=DEFAULT_INPUT, help="Frozen CSV path")
     parser.add_argument("--output-dir", type=Path, default=DEFAULT_OUTPUT, help="Output directory")
-    parser.add_argument(
-        "--recompute-features",
-        type=int,
-        choices=(0, 1),
-        default=0,
-        help="Recompute spike waveform PC1 from DANDI NWBs when set to 1",
-    )
     parser.add_argument("--cache-dir", type=Path, default=DEFAULT_CACHE, help="NWB cache directory")
+    parser.add_argument("--workers", type=int, default=DEFAULT_WORKERS, help="Parallel workers")
     return parser.parse_args()
 
 
@@ -356,29 +282,21 @@ def main() -> None:
     args = parse_args()
     args.output_dir.mkdir(parents=True, exist_ok=True)
     frame = load_frozen_table(args.input)
-    example_trace_sets = None
-    if args.recompute_features:
-        frame, comparison, provenance, waveforms = recompute_features(frame, args.cache_dir)
-        output_tables = {
-            "S14jk_spike_PC1_comparison.csv": (comparison, True),
-            "S14jk_spike_recomputation_provenance.csv": (provenance, False),
-            "S14jk_representative_spike_waveforms.csv": (waveforms, True),
-        }
-        for filename, (table, include_index) in output_tables.items():
-            path = args.output_dir / filename
-            table.to_csv(path, index=include_index)
-            LOGGER.info("Wrote %s", path)
-        for path in write_pc1_comparison_figure(comparison, args.output_dir):
-            LOGGER.info("Wrote %s", path)
-        example_trace_sets = {
-            cell.ephys_roi_id: extract_example_traces(
-                args.cache_dir / f"{cell.ephys_roi_id}.nwb"
-            )
-            for cell in EXAMPLE_CELLS
-        }
-        trace_path = args.output_dir / "S14j_example_traces.csv"
-        example_trace_frame(example_trace_sets).to_csv(trace_path, index=False)
-        LOGGER.info("Wrote %s", trace_path)
+    frame, provenance, waveforms = recompute_features(frame, args.cache_dir, args.workers)
+    for filename, table in (
+        ("S14jk_spike_recomputation_provenance.csv", provenance),
+        ("S14jk_representative_spike_waveforms.csv", waveforms),
+    ):
+        path = args.output_dir / filename
+        table.to_csv(path, index=filename.endswith("waveforms.csv"))
+        LOGGER.info("Wrote %s", path)
+    example_trace_sets = {
+        cell.ephys_roi_id: extract_example_traces(args.cache_dir / f"{cell.ephys_roi_id}.nwb")
+        for cell in EXAMPLE_CELLS
+    }
+    trace_path = args.output_dir / "S14j_example_traces.csv"
+    example_trace_frame(example_trace_sets).to_csv(trace_path, index=False)
+    LOGGER.info("Wrote %s", trace_path)
     metadata_path = args.output_dir / "AIBS_spreadsheet_pub.csv"
     frame.to_csv(metadata_path, index=False)
     LOGGER.info("Wrote %s", metadata_path)

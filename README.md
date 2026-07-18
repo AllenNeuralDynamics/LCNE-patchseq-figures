@@ -1,36 +1,26 @@
 # LCNE patch-seq figures
 
-This GitHub-backed Code Ocean capsule reproduces supplementary figure S14k
-directly from the frozen publication table in
-`code/data/`. It has no dependency on the LCNE analysis
-package, S3, eFEL, or an attached
-`/data` dataset.
-
-The frozen table contains the PC1 and membrane-time-constant values needed for
-S14k. The optional heavy run downloads the pinned raw NWBs from DANDI,
-recomputes spike-waveform PC1, and reconstructs the example traces used by
-S14j. The fast default run uses frozen PC1 values and shows a labeled S14j
-placeholder.
+This GitHub-backed Code Ocean capsule reproduces supplementary figure S14j/k.
+The frozen table in `code/data/` contains publication metadata but no spike PC1
+values. Every run downloads the pinned raw NWBs from DANDI, recomputes the
+spike-waveform matrix and PC1, and reconstructs the S14j example traces.
 
 ## Reproducible run
 
 In Code Ocean, **Reproducible Run** executes `code/run` and writes the figure,
 SVG, and four underlying-data CSV files to `/results`.
 
-Set the Reproducible Run argument to `1` to recompute spike waveform PC1 from
-the 96 raw NWB files in DANDI dandiset
-[001893](https://dandiarchive.org/dandiset/001893/) before rendering the figure.
-The default argument `0` uses the frozen publication PC1 values.
+The run downloads 96 raw NWB files from DANDI dandiset
+[001893](https://dandiarchive.org/dandiset/001893/) and processes cells in
+parallel. Set `--workers` when running the Python script to override the default
+of up to eight worker processes.
 
-Both modes write `/results/AIBS_spreadsheet_pub.csv` with the same columns. In
-mode `0`, `spike_waveform_PC1` contains the frozen values. In mode `1`, that
-column is replaced by the values recomputed from the raw NWBs; all other
-metadata columns are retained.
+The input metadata has no `spike_waveform_PC1` column. The output
+`/results/AIBS_spreadsheet_pub.csv` adds that newly computed column while
+retaining all input metadata columns.
 
-The heavy run also writes the recomputed metadata table, frozen-versus-current
-PC1 differences, selected sweep and DANDI asset provenance, representative
-spike waveforms, the nine raw traces underlying S14j, and frozen-versus-
-recomputed PC1 CDF overlays to `/results`.
+The run also writes selected sweep and DANDI asset provenance, representative
+spike waveforms, and the nine raw traces underlying S14j to `/results`.
 Because dandiset `001893` currently has only a draft version, the repository
 pins every input asset, immutable blob URL, and SHA-256 in the committed
 `dandi_001893_manifest.csv` resource.
@@ -39,7 +29,6 @@ To reproduce the same run from the repository root:
 
 ```bash
 ./code/run
-./code/run 1
 ```
 
 To run directly:
