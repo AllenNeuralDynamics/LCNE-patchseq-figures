@@ -50,6 +50,7 @@ class SpikeWaveformsTest(unittest.TestCase):
             np.testing.assert_array_equal(result.peak_indices, [30_000, 40_000])
             self.assertEqual(len(result.waveform_mv), 750)
             self.assertEqual(result.waveform_mv[250], 27.0)
+            self.assertEqual(np.count_nonzero((result.time_ms >= -3) & (result.time_ms <= 6)), 450)
 
     @staticmethod
     def _add_sweep(nwb, sweep_number, voltage_mv, stimulus_pa):

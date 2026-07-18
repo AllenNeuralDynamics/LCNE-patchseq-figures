@@ -137,7 +137,13 @@ def extract_representative_spike(path: Path) -> RepresentativeSpike:
     if not waveforms:
         raise ValueError(f"Sweep {sweep_number} has no complete spike windows")
 
-    time_ms = SPIKE_WINDOW_MS[0] + np.arange(expected_samples) * 1000.0 / sweep.sampling_rate_hz
+    time_ms = np.arange(
+        SPIKE_WINDOW_MS[0],
+        SPIKE_WINDOW_MS[1],
+        1000.0 / sweep.sampling_rate_hz,
+    )
+    if len(time_ms) != expected_samples:
+        raise ValueError("Spike time axis does not match the extracted waveform length")
     return RepresentativeSpike(
         sweep_number=sweep_number,
         stimulus_amplitude_pa=pulse.amplitude_pa,
