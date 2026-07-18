@@ -8,4 +8,5 @@ RUN pip install --no-cache-dir \
     h5py==3.16.0 \
     matplotlib==3.10.9 \
     numpy==2.2.6 \
-    pandas==2.3.3
+    pandas==2.3.3 \
+    scipy==1.15.3

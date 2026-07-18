@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 from concurrent.futures import ProcessPoolExecutor
+import json
 import logging
 import os
 from pathlib import Path
@@ -15,6 +16,7 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+from scipy.stats import ttest_ind
 
 from dandi import download_nwb, load_assets
 from example_traces import (
@@ -47,6 +49,31 @@ GROUPS = (
     ("Cerebellum", "#e2703a"),
 )
 GROUP_COLORS = dict(GROUPS)
+
+MANUSCRIPT_TESTS = (
+    ("action_potential_waveform_pc1", "spike_waveform_PC1", "Spinal cord", "Cortex", 0.01),
+    (
+        "action_potential_waveform_pc1",
+        "spike_waveform_PC1",
+        "Spinal cord",
+        "Cerebellum",
+        0.05,
+    ),
+    (
+        "membrane_time_constant",
+        "membrane_time_constant_ms",
+        "Spinal cord",
+        "Cortex",
+        0.001,
+    ),
+    (
+        "membrane_time_constant",
+        "membrane_time_constant_ms",
+        "Cerebellum",
+        "Cortex",
+        0.001,
+    ),
+)
 
 
 def load_frozen_table(path: Path) -> pd.DataFrame:
@@ -104,6 +131,53 @@ def recompute_features(frame: pd.DataFrame, cache_dir: Path, workers: int):
     updated = frame.set_index("ephys_roi_id")
     updated["spike_waveform_PC1"] = recomputed_pc1
     return updated.reset_index(), pd.DataFrame(provenance), waveforms
+
+
+def write_projection_statistics(frame: pd.DataFrame, output_dir: Path) -> Path:
+    tests = []
+    for measurement, column, group_a, group_b, threshold in MANUSCRIPT_TESTS:
+        values_a = frame.loc[frame["projection_target"] == group_a, column].dropna().to_numpy()
+        values_b = frame.loc[frame["projection_target"] == group_b, column].dropna().to_numpy()
+        result = ttest_ind(values_a, values_b, equal_var=False)
+        tests.append(
+            {
+                "measurement": measurement,
+                "column": column,
+                "comparison": f"{group_a} vs. {group_b}",
+                "group_a": {
+                    "name": group_a,
+                    "n_cells": len(values_a),
+                    "mean": float(np.mean(values_a)),
+                    "standard_deviation": float(np.std(values_a, ddof=1)),
+                },
+                "group_b": {
+                    "name": group_b,
+                    "n_cells": len(values_b),
+                    "mean": float(np.mean(values_b)),
+                    "standard_deviation": float(np.std(values_b, ddof=1)),
+                },
+                "t_statistic": float(result.statistic),
+                "degrees_of_freedom": float(result.df),
+                "p_value_two_sided": float(result.pvalue),
+                "manuscript_threshold": threshold,
+                "meets_manuscript_threshold": bool(result.pvalue < threshold),
+            }
+        )
+
+    artifact = {
+        "test": "Welch independent two-sample t-test",
+        "alternative": "two-sided",
+        "unit_of_analysis": "cell",
+        "note": (
+            "The manuscript says paired t-tests, but the source analysis used "
+            "scipy.stats.ttest_ind(equal_var=False); projection groups also have unequal sizes."
+        ),
+        "tests": tests,
+    }
+    path = output_dir / "S14_projection_target_statistics.json"
+    with path.open("w") as stream:
+        json.dump(artifact, stream, indent=2)
+    return path
 
 
 def _group_values(frame: pd.DataFrame, column: str):
@@ -300,6 +374,8 @@ def main() -> None:
     metadata_path = args.output_dir / "LCNE_patchseq_S14_cell_table.csv"
     frame.to_csv(metadata_path, index=False)
     LOGGER.info("Wrote %s", metadata_path)
+    statistics_path = write_projection_statistics(frame, args.output_dir)
+    LOGGER.info("Wrote %s", statistics_path)
     for path in generate_figure(frame, args.output_dir, example_trace_sets):
         LOGGER.info("Wrote %s", path)
 

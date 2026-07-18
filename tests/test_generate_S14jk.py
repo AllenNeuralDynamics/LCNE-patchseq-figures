@@ -1,6 +1,7 @@
 import tempfile
 import unittest
 from pathlib import Path
+import json
 
 import matplotlib.image as mpimg
 import numpy as np
@@ -10,6 +11,7 @@ from generate_S14jk import (
     DEFAULT_INPUT,
     generate_figure,
     load_frozen_table,
+    write_projection_statistics,
 )
 
 
@@ -39,6 +41,16 @@ class GenerateS14Test(unittest.TestCase):
             pc1 = pd.read_csv(Path(directory) / "S14jk_PC1_cumulative.csv")
             endpoints = pc1.groupby("projection_target")["cumulative_fraction"].max()
             self.assertTrue((endpoints == 1.0).all())
+
+            statistics_path = write_projection_statistics(frame, Path(directory))
+            with statistics_path.open() as stream:
+                statistics = json.load(stream)
+            self.assertEqual(statistics["test"], "Welch independent two-sample t-test")
+            self.assertEqual(len(statistics["tests"]), 4)
+            self.assertEqual(
+                statistics["tests"][0]["comparison"], "Spinal cord vs. Cortex"
+            )
+            self.assertIn("p_value_two_sided", statistics["tests"][0])
 
     def test_missing_required_column_is_rejected(self):
         with tempfile.TemporaryDirectory() as directory:
