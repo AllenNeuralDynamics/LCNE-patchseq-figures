@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import numpy as np
+import pandas as pd
 
 from nwb_sweeps import CurrentClampSweep, list_current_clamp_sweeps, load_current_clamp_sweep
 from spike_waveforms import detect_efel_peak_indices, infer_main_stimulus_pulse
@@ -96,3 +97,27 @@ def extract_example_traces(path: Path) -> dict[str, ExampleTrace]:
             choice = min(matching, key=lambda item: (abs(item[1]), item[3].sweep_number))
         selected[kind] = _extract_peri_stimulus_trace(kind, choice[3])
     return selected
+
+
+def example_trace_frame(
+    trace_sets: dict[str, dict[str, ExampleTrace]],
+) -> pd.DataFrame:
+    """Return all S14j traces as an underlying-data table."""
+    tables = []
+    for cell in EXAMPLE_CELLS:
+        for kind in ("hyperpol", "rheo", "supra"):
+            trace = trace_sets[cell.ephys_roi_id][kind]
+            tables.append(
+                pd.DataFrame(
+                    {
+                        "ephys_roi_id": cell.ephys_roi_id,
+                        "projection_target": cell.region,
+                        "sweep_type": kind,
+                        "sweep_number": trace.sweep_number,
+                        "stimulus_amplitude_pa": trace.stimulus_amplitude_pa,
+                        "time_ms": trace.time_ms,
+                        "voltage_mv": trace.voltage_mv,
+                    }
+                )
+            )
+    return pd.concat(tables, ignore_index=True)

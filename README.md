@@ -20,6 +20,10 @@ the 96 raw NWB files in DANDI dandiset
 [001893](https://dandiarchive.org/dandiset/001893/) before rendering the figure.
 The default argument `0` uses the frozen publication PC1 values.
 
+The heavy run also writes the recomputed metadata table, frozen-versus-current
+PC1 differences, selected sweep and DANDI asset provenance, representative
+spike waveforms, and the nine raw traces underlying S14j to `/results`.
+
 To reproduce the same run from the repository root:
 
 ```bash

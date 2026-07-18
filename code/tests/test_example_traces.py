@@ -5,7 +5,7 @@ from pathlib import Path
 import h5py
 import numpy as np
 
-from example_traces import extract_example_traces
+from example_traces import EXAMPLE_CELLS, example_trace_frame, extract_example_traces
 
 
 class ExampleTracesTest(unittest.TestCase):
@@ -27,6 +27,11 @@ class ExampleTracesTest(unittest.TestCase):
             self.assertEqual(traces["hyperpol"].sweep_number, 6)
             self.assertEqual(len(traces["rheo"].voltage_mv), 85_000)
             self.assertEqual(traces["rheo"].time_ms[0], 0.0)
+
+            trace_sets = {cell.ephys_roi_id: traces for cell in EXAMPLE_CELLS}
+            table = example_trace_frame(trace_sets)
+            self.assertEqual(len(table), 9 * 85_000)
+            self.assertEqual(set(table["sweep_type"]), {"hyperpol", "rheo", "supra"})
 
     @staticmethod
     def _add_sweep(nwb, sweep_number, description, amplitude, spike_positions):

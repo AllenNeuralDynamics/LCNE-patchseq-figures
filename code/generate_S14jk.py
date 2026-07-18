@@ -15,6 +15,13 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
+from example_traces import (
+    EXAMPLE_CELLS,
+    SUPRA_OFFSET_MV,
+    ExampleTrace,
+    example_trace_frame,
+    extract_example_traces,
+)
 from recompute_features import recompute_spike_features, write_recomputed_features
 
 LOGGER = logging.getLogger(__name__)
@@ -37,6 +44,7 @@ GROUPS = (
     ("Cortex", "#5b2a86"),
     ("Cerebellum", "#e2703a"),
 )
+GROUP_COLORS = dict(GROUPS)
 
 
 def load_frozen_table(path: Path) -> pd.DataFrame:
@@ -112,7 +120,69 @@ def _cumulative_data(groups, value_column: str) -> pd.DataFrame:
     return pd.concat(tables, ignore_index=True)
 
 
-def generate_figure(frame: pd.DataFrame, output_dir: Path) -> list[Path]:
+def _add_scale_bar(ax, x_ms=200, y_mv=50, x0=0.02, y0=0.05) -> None:
+    (x_low, x_high), (y_low, y_high) = ax.get_xlim(), ax.get_ylim()
+    x_span, y_span = x_high - x_low, y_high - y_low
+    x_start = x_low + x0 * x_span
+    y_start = y_low + y0 * y_span
+    ax.plot([x_start, x_start], [y_start, y_start + y_mv], color="black", linewidth=1.5)
+    ax.plot([x_start, x_start + x_ms], [y_start, y_start], color="black", linewidth=1.5)
+    ax.text(
+        x_start - 0.01 * x_span,
+        y_start + y_mv / 2,
+        f"{y_mv} mV",
+        ha="right",
+        va="center",
+        fontsize=8,
+        rotation=90,
+    )
+    ax.text(
+        x_start + x_ms / 2,
+        y_start - 0.02 * y_span,
+        f"{x_ms} ms",
+        ha="center",
+        va="top",
+        fontsize=8,
+    )
+
+
+def _plot_example_panel(figure, grid_spec, trace_sets: dict[str, dict[str, ExampleTrace]]) -> None:
+    trace_grid = grid_spec.subgridspec(1, 3, wspace=0.05)
+    axes = []
+    for index, cell in enumerate(EXAMPLE_CELLS):
+        axis = figure.add_subplot(trace_grid[index])
+        traces = trace_sets[cell.ephys_roi_id]
+        color = GROUP_COLORS[cell.region]
+        for kind in ("hyperpol", "rheo"):
+            trace = traces[kind]
+            axis.plot(trace.time_ms, trace.voltage_mv, color=color, linewidth=1.0)
+        supra = traces["supra"]
+        axis.plot(
+            supra.time_ms,
+            supra.voltage_mv + SUPRA_OFFSET_MV,
+            color=color,
+            linewidth=1.0,
+        )
+        axis.set_title(cell.label, fontsize=11)
+        axis.axis("off")
+        axes.append(axis)
+
+    y_low = min(axis.get_ylim()[0] for axis in axes)
+    y_high = max(axis.get_ylim()[1] for axis in axes)
+    for axis in axes:
+        axis.set_ylim(y_low, y_high)
+    _add_scale_bar(axes[0])
+    axes[0].annotate(
+        "j", xy=(-0.12, 1.08), xycoords="axes fraction", fontsize=18, fontweight="bold"
+    )
+    figure.text(0.31, 0.94, "LC-NE projections to:", ha="center", fontstyle="italic")
+
+
+def generate_figure(
+    frame: pd.DataFrame,
+    output_dir: Path,
+    example_trace_sets: dict[str, dict[str, ExampleTrace]] | None = None,
+) -> list[Path]:
     """Render the combined figure and export the S14k underlying data."""
     output_dir.mkdir(parents=True, exist_ok=True)
     pc1_groups = _group_values(frame, "spike_waveform_PC1")
@@ -123,31 +193,34 @@ def generate_figure(frame: pd.DataFrame, output_dir: Path) -> list[Path]:
     figure.subplots_adjust(left=0.04, right=0.98, bottom=0.18, top=0.84, wspace=0.24)
     grid = figure.add_gridspec(1, 2, width_ratios=(3, 2))
 
-    placeholder = figure.add_subplot(grid[0])
-    placeholder.set_facecolor("#f4f4f2")
-    placeholder.text(
-        0.5,
-        0.55,
-        "Example voltage traces are not available\nin the frozen publication CSV",
-        ha="center",
-        va="center",
-        fontsize=14,
-    )
-    placeholder.text(
-        0.5,
-        0.37,
-        "Panel j will be restored from NWB files on DANDI.",
-        ha="center",
-        va="center",
-        color="#555555",
-    )
-    placeholder.set(xticks=[], yticks=[])
-    for spine in placeholder.spines.values():
-        spine.set_visible(False)
-    placeholder.set_title("LC-NE projections to:", fontstyle="italic")
-    placeholder.annotate(
-        "j", xy=(0, 1.02), xycoords="axes fraction", fontsize=18, fontweight="bold"
-    )
+    if example_trace_sets is None:
+        placeholder = figure.add_subplot(grid[0])
+        placeholder.set_facecolor("#f4f4f2")
+        placeholder.text(
+            0.5,
+            0.55,
+            "Example voltage traces are not available\nin the frozen publication CSV",
+            ha="center",
+            va="center",
+            fontsize=14,
+        )
+        placeholder.text(
+            0.5,
+            0.37,
+            "Run with recompute features = 1 to restore panel j from DANDI.",
+            ha="center",
+            va="center",
+            color="#555555",
+        )
+        placeholder.set(xticks=[], yticks=[])
+        for spine in placeholder.spines.values():
+            spine.set_visible(False)
+        placeholder.set_title("LC-NE projections to:", fontstyle="italic")
+        placeholder.annotate(
+            "j", xy=(0, 1.02), xycoords="axes fraction", fontsize=18, fontweight="bold"
+        )
+    else:
+        _plot_example_panel(figure, grid[0], example_trace_sets)
 
     cdf_grid = grid[1].subgridspec(1, 2, wspace=0.38)
     pc1_axis = figure.add_subplot(cdf_grid[0])
@@ -204,12 +277,22 @@ def main() -> None:
     logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
     args = parse_args()
     frame = load_frozen_table(args.input)
+    example_trace_sets = None
     if args.recompute_features:
         recomputed = recompute_spike_features(frame, args.cache_dir)
         frame = recomputed.metadata
         for path in write_recomputed_features(recomputed, args.output_dir):
             LOGGER.info("Wrote %s", path)
-    for path in generate_figure(frame, args.output_dir):
+        example_trace_sets = {
+            cell.ephys_roi_id: extract_example_traces(
+                args.cache_dir / f"{cell.ephys_roi_id}.nwb"
+            )
+            for cell in EXAMPLE_CELLS
+        }
+        trace_path = args.output_dir / "S14j_example_traces.csv"
+        example_trace_frame(example_trace_sets).to_csv(trace_path, index=False)
+        LOGGER.info("Wrote %s", trace_path)
+    for path in generate_figure(frame, args.output_dir, example_trace_sets):
         LOGGER.info("Wrote %s", path)
 
 
