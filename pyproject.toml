@@ -1,0 +1,22 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "lcne-patchseq-figures"
+version = "0.1.0"
+description = "Reproduce LCNE patch-seq publication figures from frozen tables"
+readme = "README.md"
+requires-python = ">=3.10"
+license = {text = "MIT"}
+dependencies = [
+    "matplotlib",
+    "numpy",
+    "pandas",
+]
+
+[project.scripts]
+generate-s14jk = "generate_S14jk:main"
+
+[tool.setuptools]
+py-modules = ["generate_S14jk"]
