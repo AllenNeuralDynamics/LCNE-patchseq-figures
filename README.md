@@ -15,6 +15,10 @@ The run downloads 96 raw NWB files from DANDI dandiset
 parallel. Set `--workers` when running the Python script to override the default
 of up to eight worker processes.
 
+In Code Ocean, enter `--workers 4` in the Reproducible Run arguments to use four
+worker processes. Choose a value no larger than the compute environment's CPU
+count.
+
 The input metadata has no `spike_waveform_PC1` column. The output
 `/results/LCNE_patchseq_S14_cell_table.csv` adds that newly computed column while
 retaining all input metadata columns.
