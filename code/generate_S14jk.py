@@ -18,7 +18,7 @@ LOGGER = logging.getLogger(__name__)
 
 ROOT = Path(__file__).resolve().parent
 DEFAULT_INPUT = ROOT / "AIBS_spreadsheet_pub.csv"
-DEFAULT_OUTPUT = ROOT / "results"
+DEFAULT_OUTPUT = ROOT.parent / "results"
 
 REQUIRED_COLUMNS = {
     "ephys_roi_id",

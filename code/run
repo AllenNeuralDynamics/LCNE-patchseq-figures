@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+CODE_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+RESULTS_DIR="$(cd -- "$CODE_DIR/.." && pwd)/results"
+
+python -u "$CODE_DIR/generate_S14jk.py" \
+    --input "$CODE_DIR/AIBS_spreadsheet_pub.csv" \
+    --output-dir "$RESULTS_DIR"

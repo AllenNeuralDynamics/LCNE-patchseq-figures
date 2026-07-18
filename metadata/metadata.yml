@@ -1,0 +1,5 @@
+metadata_version: 1
+name: LCNE patch-seq figures
+description: Reproduce supplementary figure S14j/k from a frozen publication table.
+authors:
+- name: hanhou
