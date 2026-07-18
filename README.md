@@ -24,7 +24,12 @@ The input metadata has no `spike_waveform_PC1` column. The output
 retaining all input metadata columns.
 
 The run also writes selected sweep and DANDI asset provenance, representative
-spike waveforms, and the nine raw traces underlying S14j to `/results`.
+spike waveforms, the nine raw traces underlying S14j, and
+`S14_projection_target_statistics.json` to `/results`. The JSON recomputes the
+four manuscript projection-target contrasts using the source analysis method:
+two-sided Welch independent-samples t-tests. Although the manuscript says
+"paired t-tests," the source code used `ttest_ind(equal_var=False)` and the
+projection groups have different cell counts.
 Because dandiset `001893` currently has only a draft version, the repository
 pins every input asset, immutable blob URL, and SHA-256 in the committed
 `dandi_001893_manifest.csv` resource.
