@@ -3,7 +3,14 @@ set -euo pipefail
 
 CODE_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 RESULTS_DIR="$(cd -- "$CODE_DIR/.." && pwd)/results"
+RECOMPUTE_FEATURES="${1:-0}"
+
+if [[ "$RECOMPUTE_FEATURES" != "0" && "$RECOMPUTE_FEATURES" != "1" ]]; then
+    echo "Error: recompute features must be 0 or 1" >&2
+    exit 2
+fi
 
 python -u "$CODE_DIR/generate_S14jk.py" \
     --input "$CODE_DIR/AIBS_spreadsheet_pub.csv" \
-    --output-dir "$RESULTS_DIR"
+    --output-dir "$RESULTS_DIR" \
+    --recompute-features "$RECOMPUTE_FEATURES"

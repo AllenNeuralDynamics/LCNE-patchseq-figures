@@ -15,10 +15,16 @@ for obtaining those traces from NWB files on DANDI.
 In Code Ocean, **Reproducible Run** executes `code/run` and writes the figure,
 SVG, and four underlying-data CSV files to `/results`.
 
+Set the Reproducible Run argument to `1` to recompute spike waveform PC1 from
+the 96 raw NWB files in DANDI dandiset
+[001893](https://dandiarchive.org/dandiset/001893/) before rendering the figure.
+The default argument `0` uses the frozen publication PC1 values.
+
 To reproduce the same run from the repository root:
 
 ```bash
 ./code/run
+./code/run 1
 ```
 
 For local package development:

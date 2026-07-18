@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import logging
+import os
 from pathlib import Path
 
 import matplotlib
@@ -14,11 +15,14 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
+from recompute_features import recompute_spike_features, write_recomputed_features
+
 LOGGER = logging.getLogger(__name__)
 
 ROOT = Path(__file__).resolve().parent
 DEFAULT_INPUT = ROOT / "AIBS_spreadsheet_pub.csv"
 DEFAULT_OUTPUT = ROOT.parent / "results"
+DEFAULT_CACHE = Path(os.environ.get("DANDI_NWB_CACHE", "/scratch/lcne-patchseq-nwb"))
 
 REQUIRED_COLUMNS = {
     "ephys_roi_id",
@@ -185,6 +189,14 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--input", type=Path, default=DEFAULT_INPUT, help="Frozen CSV path")
     parser.add_argument("--output-dir", type=Path, default=DEFAULT_OUTPUT, help="Output directory")
+    parser.add_argument(
+        "--recompute-features",
+        type=int,
+        choices=(0, 1),
+        default=0,
+        help="Recompute spike waveform PC1 from DANDI NWBs when set to 1",
+    )
+    parser.add_argument("--cache-dir", type=Path, default=DEFAULT_CACHE, help="NWB cache directory")
     return parser.parse_args()
 
 
@@ -192,6 +204,11 @@ def main() -> None:
     logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
     args = parse_args()
     frame = load_frozen_table(args.input)
+    if args.recompute_features:
+        recomputed = recompute_spike_features(frame, args.cache_dir)
+        frame = recomputed.metadata
+        for path in write_recomputed_features(recomputed, args.output_dir):
+            LOGGER.info("Wrote %s", path)
     for path in generate_figure(frame, args.output_dir):
         LOGGER.info("Wrote %s", path)
 
