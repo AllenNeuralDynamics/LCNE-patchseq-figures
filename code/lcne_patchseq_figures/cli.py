@@ -22,7 +22,11 @@ from .example_traces import (
     example_trace_frame,
     extract_example_traces,
 )
-from .recompute_features import recompute_spike_features, write_recomputed_features
+from .recompute_features import (
+    recompute_spike_features,
+    write_pc1_comparison_figure,
+    write_recomputed_features,
+)
 
 LOGGER = logging.getLogger(__name__)
 
@@ -282,6 +286,8 @@ def main() -> None:
         recomputed = recompute_spike_features(frame, args.cache_dir)
         frame = recomputed.metadata
         for path in write_recomputed_features(recomputed, args.output_dir):
+            LOGGER.info("Wrote %s", path)
+        for path in write_pc1_comparison_figure(recomputed.comparison, args.output_dir):
             LOGGER.info("Wrote %s", path)
         example_trace_sets = {
             cell.ephys_roi_id: extract_example_traces(

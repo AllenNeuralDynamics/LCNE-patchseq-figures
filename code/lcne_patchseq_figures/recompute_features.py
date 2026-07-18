@@ -7,6 +7,8 @@ from dataclasses import dataclass
 import logging
 from pathlib import Path
 
+import matplotlib.pyplot as plt
+import numpy as np
 import pandas as pd
 
 from .dandi_assets import DandiNWBAsset, download_nwb_asset, resolve_manifest_assets
@@ -14,6 +16,12 @@ from .spike_pca import compute_spike_pc1, representative_waveform_frame
 from .spike_waveforms import RepresentativeSpike, extract_representative_spike
 
 LOGGER = logging.getLogger(__name__)
+
+PROJECTION_COLORS = {
+    "Spinal cord": "#f2b705",
+    "Cortex": "#5b2a86",
+    "Cerebellum": "#e2703a",
+}
 
 
 @dataclass(frozen=True)
@@ -64,6 +72,7 @@ def recompute_spike_features(
     original = frame.set_index("ephys_roi_id")["spike_waveform_PC1"].astype(float)
     comparison = pd.DataFrame(
         {
+            "projection_target": frame.set_index("ephys_roi_id")["projection_target"],
             "spike_waveform_PC1_frozen": original,
             "spike_waveform_PC1_recomputed": pc1,
         }
@@ -94,4 +103,54 @@ def write_recomputed_features(result: RecomputedFeatures, output_dir: Path) -> l
     result.comparison.to_csv(paths[1])
     result.provenance.to_csv(paths[2], index=False)
     result.waveforms.to_csv(paths[3])
+    return paths
+
+
+def write_pc1_comparison_figure(
+    comparison: pd.DataFrame,
+    output_dir: Path,
+) -> list[Path]:
+    """Overlay frozen and recomputed PC1 CDFs for each projection target."""
+    required = {
+        "projection_target",
+        "spike_waveform_PC1_frozen",
+        "spike_waveform_PC1_recomputed",
+    }
+    missing = sorted(required.difference(comparison.columns))
+    if missing:
+        raise ValueError(f"PC1 comparison is missing columns: {', '.join(missing)}")
+
+    output_dir.mkdir(parents=True, exist_ok=True)
+    figure, axes = plt.subplots(1, 3, figsize=(12, 3.6), sharey=True)
+    for axis, (projection_target, color) in zip(axes, PROJECTION_COLORS.items()):
+        group = comparison.loc[comparison["projection_target"] == projection_target]
+        for column, linestyle, label in (
+            ("spike_waveform_PC1_frozen", "-", "Frozen"),
+            ("spike_waveform_PC1_recomputed", "--", "Recomputed"),
+        ):
+            values = np.sort(group[column].dropna().to_numpy(dtype=float))
+            fractions = np.arange(1, len(values) + 1) / len(values)
+            axis.step(
+                values,
+                fractions,
+                where="post",
+                color=color,
+                linestyle=linestyle,
+                linewidth=2,
+                label=label,
+            )
+        axis.set(title=projection_target, xlabel="PC1", ylim=(0, 1))
+        axis.spines[["top", "right"]].set_visible(False)
+        axis.legend(frameon=False)
+    axes[0].set_ylabel("Cumulative fraction")
+    figure.suptitle("Frozen and recomputed spike-waveform PC1", fontsize=13)
+    figure.tight_layout()
+
+    paths = [
+        output_dir / "S14k_PC1_frozen_vs_recomputed.png",
+        output_dir / "S14k_PC1_frozen_vs_recomputed.svg",
+    ]
+    for path in paths:
+        figure.savefig(path, dpi=300)
+    plt.close(figure)
     return paths

@@ -24,7 +24,8 @@ The default argument `0` uses the frozen publication PC1 values.
 
 The heavy run also writes the recomputed metadata table, frozen-versus-current
 PC1 differences, selected sweep and DANDI asset provenance, representative
-spike waveforms, and the nine raw traces underlying S14j to `/results`.
+spike waveforms, the nine raw traces underlying S14j, and frozen-versus-
+recomputed PC1 CDF overlays to `/results`.
 Because dandiset `001893` currently has only a draft version, the repository
 pins every input asset, immutable blob URL, and SHA-256 in the packaged
 `dandi_001893_manifest.csv` resource.

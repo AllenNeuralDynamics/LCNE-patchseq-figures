@@ -8,6 +8,7 @@ import pandas as pd
 from lcne_patchseq_figures.dandi_assets import DandiNWBAsset
 from lcne_patchseq_figures.recompute_features import (
     recompute_spike_features,
+    write_pc1_comparison_figure,
     write_recomputed_features,
 )
 from lcne_patchseq_figures.spike_waveforms import RepresentativeSpike
@@ -18,6 +19,7 @@ class RecomputeFeaturesTest(unittest.TestCase):
         frame = pd.DataFrame(
             {
                 "ephys_roi_id": ["111", "222", "333"],
+                "projection_target": ["Spinal cord", "Cortex", "Cerebellum"],
                 "spike_waveform_PC1": [10.0, 20.0, 30.0],
             }
         )
@@ -59,11 +61,15 @@ class RecomputeFeaturesTest(unittest.TestCase):
                 extract_spike=extract_spike,
             )
             outputs = write_recomputed_features(result, output_dir)
+            figure_outputs = write_pc1_comparison_figure(result.comparison, output_dir)
 
             self.assertEqual(len(result.metadata), 3)
             self.assertAlmostEqual(result.metadata["spike_waveform_PC1"].mean(), 0.0)
             self.assertEqual(result.provenance["spike_count"].tolist(), [2, 2, 2])
             self.assertTrue(all(path.exists() and path.stat().st_size > 0 for path in outputs))
+            self.assertTrue(
+                all(path.exists() and path.stat().st_size > 0 for path in figure_outputs)
+            )
 
 
 if __name__ == "__main__":
