@@ -203,7 +203,9 @@ def _plot_cdf(ax, groups, title: str, xlabel: str) -> None:
         )
     ax.set(title=title, xlabel=xlabel, ylabel="Cumulative fraction", ylim=(0, 1))
     ax.spines[["top", "right"]].set_visible(False)
-    ax.legend(frameon=False, fontsize=8, loc="best")
+    ax.spines[["left", "bottom"]].set_linewidth(1.0)
+    ax.tick_params(direction="out", width=1.0)
+    ax.set_box_aspect(1)
 
 
 def _raw_data(frame: pd.DataFrame, source_column: str, output_column: str) -> pd.DataFrame:
