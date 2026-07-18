@@ -360,7 +360,6 @@ def main() -> None:
     if args.recompute_features:
         frame, comparison, provenance, waveforms = recompute_features(frame, args.cache_dir)
         output_tables = {
-            "AIBS_spreadsheet_recomputed.csv": (frame, False),
             "S14jk_spike_PC1_comparison.csv": (comparison, True),
             "S14jk_spike_recomputation_provenance.csv": (provenance, False),
             "S14jk_representative_spike_waveforms.csv": (waveforms, True),
@@ -380,6 +379,9 @@ def main() -> None:
         trace_path = args.output_dir / "S14j_example_traces.csv"
         example_trace_frame(example_trace_sets).to_csv(trace_path, index=False)
         LOGGER.info("Wrote %s", trace_path)
+    metadata_path = args.output_dir / "AIBS_spreadsheet_pub.csv"
+    frame.to_csv(metadata_path, index=False)
+    LOGGER.info("Wrote %s", metadata_path)
     for path in generate_figure(frame, args.output_dir, example_trace_sets):
         LOGGER.info("Wrote %s", path)
 

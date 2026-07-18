@@ -22,6 +22,11 @@ the 96 raw NWB files in DANDI dandiset
 [001893](https://dandiarchive.org/dandiset/001893/) before rendering the figure.
 The default argument `0` uses the frozen publication PC1 values.
 
+Both modes write `/results/AIBS_spreadsheet_pub.csv` with the same columns. In
+mode `0`, `spike_waveform_PC1` contains the frozen values. In mode `1`, that
+column is replaced by the values recomputed from the raw NWBs; all other
+metadata columns are retained.
+
 The heavy run also writes the recomputed metadata table, frozen-versus-current
 PC1 differences, selected sweep and DANDI asset provenance, representative
 spike waveforms, the nine raw traces underlying S14j, and frozen-versus-
