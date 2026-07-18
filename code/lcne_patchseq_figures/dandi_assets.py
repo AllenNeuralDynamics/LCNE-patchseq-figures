@@ -14,7 +14,7 @@ from urllib.request import urlopen
 DANDI_API = "https://api.dandiarchive.org/api"
 DANDISET_ID = "001893"
 DANDI_VERSION = "draft"
-DEFAULT_MANIFEST = Path(__file__).resolve().with_name("dandi_001893_manifest.csv")
+DEFAULT_MANIFEST = Path(__file__).resolve().parent / "data" / "dandi_001893_manifest.csv"
 
 ROI_ID_PATTERN = re.compile(r"_ses-(\d+)_icephys\.nwb$")
 

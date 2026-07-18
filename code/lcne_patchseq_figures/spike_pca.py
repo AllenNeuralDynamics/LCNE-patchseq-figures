@@ -7,7 +7,7 @@ from collections.abc import Mapping
 import numpy as np
 import pandas as pd
 
-from spike_waveforms import RepresentativeSpike
+from .spike_waveforms import RepresentativeSpike
 
 NORMALIZATION_WINDOW_MS = (-2.0, 4.0)
 ANALYSIS_WINDOW_MS = (-3.0, 6.0)

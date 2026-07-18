@@ -5,7 +5,7 @@ from pathlib import Path
 import matplotlib.image as mpimg
 import pandas as pd
 
-from generate_S14jk import DEFAULT_INPUT, generate_figure, load_frozen_table
+from lcne_patchseq_figures.cli import DEFAULT_INPUT, generate_figure, load_frozen_table
 
 
 class GenerateS14Test(unittest.TestCase):

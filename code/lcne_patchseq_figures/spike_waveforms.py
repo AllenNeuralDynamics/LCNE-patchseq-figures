@@ -7,7 +7,7 @@ from pathlib import Path
 
 import numpy as np
 
-from nwb_sweeps import CurrentClampSweep, list_current_clamp_sweeps, load_current_clamp_sweep
+from .nwb_sweeps import CurrentClampSweep, list_current_clamp_sweeps, load_current_clamp_sweep
 
 LONG_SQUARE_RHEO_LABELS = ("X3LP_Rheo_DA_0", "X5LP_Rheo_DA_0")
 LEGACY_SAMPLING_RATE_HZ = 50_000.0

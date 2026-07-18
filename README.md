@@ -1,14 +1,16 @@
 # LCNE patch-seq figures
 
 This GitHub-backed Code Ocean capsule reproduces supplementary figure S14k
-directly from the frozen `code/AIBS_spreadsheet_pub.csv` publication table. It
-has no dependency on the LCNE analysis package, S3, eFEL, or an attached
+directly from the frozen publication table in
+`code/lcne_patchseq_figures/data/`. It has no dependency on the LCNE analysis
+package, S3, eFEL, or an attached
 `/data` dataset.
 
 The frozen table contains the PC1 and membrane-time-constant values needed for
-S14k, but not the raw voltage arrays used by S14j. The combined output therefore
-shows a labeled placeholder for panel j. A later revision will add a small path
-for obtaining those traces from NWB files on DANDI.
+S14k. The optional heavy run downloads the pinned raw NWBs from DANDI,
+recomputes spike-waveform PC1, and reconstructs the example traces used by
+S14j. The fast default run uses frozen PC1 values and shows a labeled S14j
+placeholder.
 
 ## Reproducible run
 
@@ -24,8 +26,8 @@ The heavy run also writes the recomputed metadata table, frozen-versus-current
 PC1 differences, selected sweep and DANDI asset provenance, representative
 spike waveforms, and the nine raw traces underlying S14j to `/results`.
 Because dandiset `001893` currently has only a draft version, the repository
-pins every input asset, immutable blob URL, and SHA-256 in
-`code/dandi_001893_manifest.csv`.
+pins every input asset, immutable blob URL, and SHA-256 in the packaged
+`dandi_001893_manifest.csv` resource.
 
 To reproduce the same run from the repository root:
 
@@ -54,6 +56,8 @@ publication in
 
 ## Repository layout
 
-- `code/`: capsule entry point, generator, frozen input table, and tests
+- `code/run`: Code Ocean entry point
+- `code/lcne_patchseq_figures/`: importable runtime package and frozen resources
+- `tests/`: unit tests
 - `environment/`: pinned Code Ocean container definition
 - `metadata/`: capsule name, description, and author metadata

@@ -15,20 +15,20 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
-from example_traces import (
+from .example_traces import (
     EXAMPLE_CELLS,
     SUPRA_OFFSET_MV,
     ExampleTrace,
     example_trace_frame,
     extract_example_traces,
 )
-from recompute_features import recompute_spike_features, write_recomputed_features
+from .recompute_features import recompute_spike_features, write_recomputed_features
 
 LOGGER = logging.getLogger(__name__)
 
 ROOT = Path(__file__).resolve().parent
-DEFAULT_INPUT = ROOT / "AIBS_spreadsheet_pub.csv"
-DEFAULT_OUTPUT = ROOT.parent / "results"
+DEFAULT_INPUT = ROOT / "data" / "AIBS_spreadsheet_pub.csv"
+DEFAULT_OUTPUT = Path.cwd() / "results"
 DEFAULT_CACHE = Path(os.environ.get("DANDI_NWB_CACHE", "/scratch/lcne-patchseq-nwb"))
 
 REQUIRED_COLUMNS = {

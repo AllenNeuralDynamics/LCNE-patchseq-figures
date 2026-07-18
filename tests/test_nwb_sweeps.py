@@ -5,7 +5,7 @@ from pathlib import Path
 import h5py
 import numpy as np
 
-from nwb_sweeps import list_current_clamp_sweeps, load_current_clamp_sweep
+from lcne_patchseq_figures.nwb_sweeps import list_current_clamp_sweeps, load_current_clamp_sweep
 
 
 class NWBSweepsTest(unittest.TestCase):

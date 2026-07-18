@@ -5,7 +5,7 @@ import hashlib
 from pathlib import Path
 import tempfile
 
-from dandi_assets import (
+from lcne_patchseq_figures.dandi_assets import (
     DEFAULT_MANIFEST,
     DandiNWBAsset,
     download_nwb_asset,

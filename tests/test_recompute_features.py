@@ -5,9 +5,12 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from dandi_assets import DandiNWBAsset
-from recompute_features import recompute_spike_features, write_recomputed_features
-from spike_waveforms import RepresentativeSpike
+from lcne_patchseq_figures.dandi_assets import DandiNWBAsset
+from lcne_patchseq_figures.recompute_features import (
+    recompute_spike_features,
+    write_recomputed_features,
+)
+from lcne_patchseq_figures.spike_waveforms import RepresentativeSpike
 
 
 class RecomputeFeaturesTest(unittest.TestCase):

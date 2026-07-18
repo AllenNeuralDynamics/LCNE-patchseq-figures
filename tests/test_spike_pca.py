@@ -3,7 +3,7 @@ import unittest
 import numpy as np
 import pandas as pd
 
-from spike_pca import compute_spike_pc1, normalize_waveforms
+from lcne_patchseq_figures.spike_pca import compute_spike_pc1, normalize_waveforms
 
 
 class SpikePCATest(unittest.TestCase):

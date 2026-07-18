@@ -17,8 +17,10 @@ dependencies = [
 ]
 
 [project.scripts]
-generate-s14jk = "generate_S14jk:main"
+generate-s14jk = "lcne_patchseq_figures.cli:main"
 
-[tool.setuptools]
-package-dir = {"" = "code"}
-py-modules = ["generate_S14jk"]
+[tool.setuptools.packages.find]
+where = ["code"]
+
+[tool.setuptools.package-data]
+lcne_patchseq_figures = ["data/*.csv"]

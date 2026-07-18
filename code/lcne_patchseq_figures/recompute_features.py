@@ -9,9 +9,9 @@ from pathlib import Path
 
 import pandas as pd
 
-from dandi_assets import DandiNWBAsset, download_nwb_asset, resolve_manifest_assets
-from spike_pca import compute_spike_pc1, representative_waveform_frame
-from spike_waveforms import RepresentativeSpike, extract_representative_spike
+from .dandi_assets import DandiNWBAsset, download_nwb_asset, resolve_manifest_assets
+from .spike_pca import compute_spike_pc1, representative_waveform_frame
+from .spike_waveforms import RepresentativeSpike, extract_representative_spike
 
 LOGGER = logging.getLogger(__name__)
 

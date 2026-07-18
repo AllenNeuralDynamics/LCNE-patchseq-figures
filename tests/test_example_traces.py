@@ -5,7 +5,11 @@ from pathlib import Path
 import h5py
 import numpy as np
 
-from example_traces import EXAMPLE_CELLS, example_trace_frame, extract_example_traces
+from lcne_patchseq_figures.example_traces import (
+    EXAMPLE_CELLS,
+    example_trace_frame,
+    extract_example_traces,
+)
 
 
 class ExampleTracesTest(unittest.TestCase):
