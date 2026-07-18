@@ -5,7 +5,7 @@ from pathlib import Path
 import h5py
 import numpy as np
 
-from lcne_patchseq_figures.spike_waveforms import (
+from spikes import (
     detect_efel_peak_indices,
     detect_efel_peak_times,
     extract_representative_spike,

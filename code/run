@@ -10,7 +10,7 @@ if [[ "$RECOMPUTE_FEATURES" != "0" && "$RECOMPUTE_FEATURES" != "1" ]]; then
     exit 2
 fi
 
-PYTHONPATH="$CODE_DIR${PYTHONPATH:+:$PYTHONPATH}" python -u -m lcne_patchseq_figures.cli \
-    --input "$CODE_DIR/lcne_patchseq_figures/data/AIBS_spreadsheet_pub.csv" \
+python -u "$CODE_DIR/generate_S14jk.py" \
+    --input "$CODE_DIR/data/AIBS_spreadsheet_pub.csv" \
     --output-dir "$RESULTS_DIR" \
     --recompute-features "$RECOMPUTE_FEATURES"

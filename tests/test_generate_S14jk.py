@@ -3,9 +3,15 @@ import unittest
 from pathlib import Path
 
 import matplotlib.image as mpimg
+import numpy as np
 import pandas as pd
 
-from lcne_patchseq_figures.cli import DEFAULT_INPUT, generate_figure, load_frozen_table
+from generate_S14jk import (
+    DEFAULT_INPUT,
+    generate_figure,
+    load_frozen_table,
+    write_pc1_comparison_figure,
+)
 
 
 class GenerateS14Test(unittest.TestCase):
@@ -27,6 +33,18 @@ class GenerateS14Test(unittest.TestCase):
             pc1 = pd.read_csv(Path(directory) / "S14jk_PC1_cumulative.csv")
             endpoints = pc1.groupby("projection_target")["cumulative_fraction"].max()
             self.assertTrue((endpoints == 1.0).all())
+
+            comparison = pd.DataFrame(
+                {
+                    "projection_target": np.repeat(
+                        ["Spinal cord", "Cortex", "Cerebellum"], 3
+                    ),
+                    "spike_waveform_PC1_frozen": np.arange(9),
+                    "spike_waveform_PC1_recomputed": np.arange(9) + 0.01,
+                }
+            )
+            comparison_outputs = write_pc1_comparison_figure(comparison, Path(directory))
+            self.assertTrue(all(path.stat().st_size > 0 for path in comparison_outputs))
 
     def test_missing_required_column_is_rejected(self):
         with tempfile.TemporaryDirectory() as directory:

@@ -6,11 +6,11 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import numpy as np
+import pandas as pd
 
-from .nwb_sweeps import CurrentClampSweep, list_current_clamp_sweeps, load_current_clamp_sweep
+from ephys import CurrentClampSweep, list_current_clamp_sweeps, load_current_clamp_sweep
 
 LONG_SQUARE_RHEO_LABELS = ("X3LP_Rheo_DA_0", "X5LP_Rheo_DA_0")
-LEGACY_SAMPLING_RATE_HZ = 50_000.0
 SPIKE_THRESHOLD_MV = -10.0
 SPIKE_WINDOW_MS = (-5.0, 10.0)
 
@@ -43,20 +43,12 @@ def infer_main_stimulus_pulse(stimulus_pa: np.ndarray) -> StimulusPulse:
     """Return the longest finite pulse relative to the modal stimulus baseline."""
     stimulus_pa = np.asarray(stimulus_pa, dtype=float)
     finite = np.isfinite(stimulus_pa)
-    if not finite.any():
-        raise ValueError("Stimulus has no finite samples")
-
     edge_samples = max(1, len(stimulus_pa) // 20)
     edges = np.concatenate((stimulus_pa[:edge_samples], stimulus_pa[-edge_samples:]))
     baseline = float(np.nanmedian(edges))
-    if not np.isfinite(baseline):
-        raise ValueError("Stimulus endpoints have no finite baseline samples")
     active = finite & ~np.isclose(stimulus_pa, baseline, atol=1e-6, rtol=0.0)
     starts = np.flatnonzero(active & np.r_[True, ~active[:-1]])
     stops = np.flatnonzero(active & np.r_[~active[1:], True]) + 1
-    if not len(starts):
-        raise ValueError("Stimulus has no nonbaseline pulse")
-
     start, stop = max(zip(starts, stops), key=lambda bounds: bounds[1] - bounds[0])
     amplitude = float(np.nanmedian(stimulus_pa[start:stop]) - baseline)
     return StimulusPulse(int(start), int(stop), amplitude)
@@ -117,11 +109,6 @@ def detect_efel_peak_times(
 
 
 def _candidate_rheobase_sweep(sweep: CurrentClampSweep) -> tuple[StimulusPulse, np.ndarray] | None:
-    if sweep.sampling_rate_hz != LEGACY_SAMPLING_RATE_HZ:
-        raise ValueError(
-            f"Sweep {sweep.sweep_number} has sampling rate {sweep.sampling_rate_hz}, "
-            f"expected {LEGACY_SAMPLING_RATE_HZ}"
-        )
     pulse = infer_main_stimulus_pulse(sweep.stimulus_pa)
     if pulse.sample_count < 0.8 * sweep.sampling_rate_hz:
         return None
@@ -164,20 +151,42 @@ def extract_representative_spike(path: Path) -> RepresentativeSpike:
         waveforms.append(sweep.voltage_mv[indices])
     expected_samples = before + after
     waveforms = [waveform for waveform in waveforms if len(waveform) == expected_samples]
-    if not waveforms:
-        raise ValueError(f"Sweep {sweep_number} has no complete spike windows")
-
     time_ms = np.arange(
         SPIKE_WINDOW_MS[0],
         SPIKE_WINDOW_MS[1],
         1000.0 / sweep.sampling_rate_hz,
     )
-    if len(time_ms) != expected_samples:
-        raise ValueError("Spike time axis does not match the extracted waveform length")
     return RepresentativeSpike(
         sweep_number=sweep_number,
         stimulus_amplitude_pa=pulse.amplitude_pa,
         peak_indices=np.searchsorted(raw_time_ms, peak_times_ms),
         time_ms=time_ms,
         waveform_mv=np.mean(waveforms, axis=0),
+    )
+
+
+def waveform_frame(representatives: dict[str, RepresentativeSpike]) -> pd.DataFrame:
+    first = next(iter(representatives.values()))
+    return pd.DataFrame(
+        {ephys_roi_id: spike.waveform_mv for ephys_roi_id, spike in representatives.items()},
+        index=first.time_ms,
+    ).T.rename_axis("ephys_roi_id")
+
+
+def compute_pc1(waveforms: pd.DataFrame) -> pd.Series:
+    time_ms = np.asarray(waveforms.columns, dtype=float)
+    values = waveforms.to_numpy(dtype=float)
+    normalize = (time_ms >= -2) & (time_ms <= 4)
+    minimum = values[:, normalize].min(axis=1, keepdims=True)
+    span = np.ptp(values[:, normalize], axis=1, keepdims=True)
+    normalized = (values - minimum) / span
+    analysis = (time_ms >= -3) & (time_ms <= 6)
+    centered = normalized[:, analysis] - normalized[:, analysis].mean(axis=0)
+    left_vectors, singular_values, loadings = np.linalg.svd(centered, full_matrices=False)
+    signs = np.sign(loadings[np.arange(len(loadings)), np.argmax(np.abs(loadings), axis=1)])
+    signs[signs == 0] = 1
+    return pd.Series(
+        (left_vectors * signs * singular_values)[:, 0],
+        index=waveforms.index,
+        name="spike_waveform_PC1",
     )

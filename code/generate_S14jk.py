@@ -15,24 +15,21 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
-from .example_traces import (
+from dandi import download_nwb, load_assets
+from example_traces import (
     EXAMPLE_CELLS,
     SUPRA_OFFSET_MV,
     ExampleTrace,
     example_trace_frame,
     extract_example_traces,
 )
-from .recompute_features import (
-    recompute_spike_features,
-    write_pc1_comparison_figure,
-    write_recomputed_features,
-)
+from spikes import compute_pc1, extract_representative_spike, waveform_frame
 
 LOGGER = logging.getLogger(__name__)
 
 ROOT = Path(__file__).resolve().parent
 DEFAULT_INPUT = ROOT / "data" / "AIBS_spreadsheet_pub.csv"
-DEFAULT_OUTPUT = Path.cwd() / "results"
+DEFAULT_OUTPUT = ROOT.parent / "results"
 DEFAULT_CACHE = Path(os.environ.get("DANDI_NWB_CACHE", "/scratch/lcne-patchseq-nwb"))
 
 REQUIRED_COLUMNS = {
@@ -71,6 +68,48 @@ def load_frozen_table(path: Path) -> pd.DataFrame:
             raise ValueError(f"Column {column} contains non-numeric values")
         frame[column] = converted
     return frame
+
+
+def recompute_features(frame: pd.DataFrame, cache_dir: Path):
+    ephys_roi_ids = frame["ephys_roi_id"].tolist()
+    assets = load_assets(ephys_roi_ids)
+    representatives = {}
+    provenance = []
+    for position, ephys_roi_id in enumerate(ephys_roi_ids, start=1):
+        LOGGER.info("Recomputing %s (%d/%d)", ephys_roi_id, position, len(ephys_roi_ids))
+        asset = assets[ephys_roi_id]
+        spike = extract_representative_spike(download_nwb(asset, cache_dir))
+        representatives[ephys_roi_id] = spike
+        provenance.append(
+            {
+                "ephys_roi_id": ephys_roi_id,
+                "dandi_asset_id": asset.asset_id,
+                "dandi_asset_path": asset.path,
+                "dandi_asset_size_bytes": asset.size,
+                "dandi_asset_sha256": asset.sha256,
+                "selected_sweep_number": spike.sweep_number,
+                "stimulus_amplitude_pa": spike.stimulus_amplitude_pa,
+                "spike_count": len(spike.peak_indices),
+            }
+        )
+
+    waveforms = waveform_frame(representatives)
+    recomputed_pc1 = compute_pc1(waveforms)
+    frozen_pc1 = frame.set_index("ephys_roi_id")["spike_waveform_PC1"]
+    comparison = pd.DataFrame(
+        {
+            "projection_target": frame.set_index("ephys_roi_id")["projection_target"],
+            "spike_waveform_PC1_frozen": frozen_pc1,
+            "spike_waveform_PC1_recomputed": recomputed_pc1,
+        }
+    )
+    comparison["difference"] = (
+        comparison["spike_waveform_PC1_recomputed"]
+        - comparison["spike_waveform_PC1_frozen"]
+    )
+    updated = frame.set_index("ephys_roi_id")
+    updated["spike_waveform_PC1"] = recomputed_pc1
+    return updated.reset_index(), comparison, pd.DataFrame(provenance), waveforms
 
 
 def _group_values(frame: pd.DataFrame, column: str):
@@ -122,6 +161,41 @@ def _cumulative_data(groups, value_column: str) -> pd.DataFrame:
             )
         )
     return pd.concat(tables, ignore_index=True)
+
+
+def write_pc1_comparison_figure(comparison: pd.DataFrame, output_dir: Path) -> list[Path]:
+    figure, axes = plt.subplots(1, 3, figsize=(12, 3.6), sharey=True)
+    for axis, (projection_target, color) in zip(axes, GROUPS):
+        group = comparison.loc[comparison["projection_target"] == projection_target]
+        for column, linestyle, label in (
+            ("spike_waveform_PC1_frozen", "-", "Frozen"),
+            ("spike_waveform_PC1_recomputed", "--", "Recomputed"),
+        ):
+            values = np.sort(group[column].to_numpy(dtype=float))
+            fractions = np.arange(1, len(values) + 1) / len(values)
+            axis.step(
+                values,
+                fractions,
+                where="post",
+                color=color,
+                linestyle=linestyle,
+                linewidth=2,
+                label=label,
+            )
+        axis.set(title=projection_target, xlabel="PC1", ylim=(0, 1))
+        axis.spines[["top", "right"]].set_visible(False)
+        axis.legend(frameon=False)
+    axes[0].set_ylabel("Cumulative fraction")
+    figure.suptitle("Frozen and recomputed spike-waveform PC1", fontsize=13)
+    figure.tight_layout()
+    paths = [
+        output_dir / "S14k_PC1_frozen_vs_recomputed.png",
+        output_dir / "S14k_PC1_frozen_vs_recomputed.svg",
+    ]
+    for path in paths:
+        figure.savefig(path, dpi=300)
+    plt.close(figure)
+    return paths
 
 
 def _add_scale_bar(ax, x_ms=200, y_mv=50, x0=0.02, y0=0.05) -> None:
@@ -280,14 +354,22 @@ def parse_args() -> argparse.Namespace:
 def main() -> None:
     logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
     args = parse_args()
+    args.output_dir.mkdir(parents=True, exist_ok=True)
     frame = load_frozen_table(args.input)
     example_trace_sets = None
     if args.recompute_features:
-        recomputed = recompute_spike_features(frame, args.cache_dir)
-        frame = recomputed.metadata
-        for path in write_recomputed_features(recomputed, args.output_dir):
+        frame, comparison, provenance, waveforms = recompute_features(frame, args.cache_dir)
+        output_tables = {
+            "AIBS_spreadsheet_recomputed.csv": (frame, False),
+            "S14jk_spike_PC1_comparison.csv": (comparison, True),
+            "S14jk_spike_recomputation_provenance.csv": (provenance, False),
+            "S14jk_representative_spike_waveforms.csv": (waveforms, True),
+        }
+        for filename, (table, include_index) in output_tables.items():
+            path = args.output_dir / filename
+            table.to_csv(path, index=include_index)
             LOGGER.info("Wrote %s", path)
-        for path in write_pc1_comparison_figure(recomputed.comparison, args.output_dir):
+        for path in write_pc1_comparison_figure(comparison, args.output_dir):
             LOGGER.info("Wrote %s", path)
         example_trace_sets = {
             cell.ephys_roi_id: extract_example_traces(

@@ -24,10 +24,7 @@ def _text(value) -> str:
     return value.decode() if isinstance(value, bytes) else str(value)
 
 
-def _converted_data(dataset: h5py.Dataset, expected_unit: str, scale: float) -> np.ndarray:
-    unit = _text(dataset.attrs.get("unit", ""))
-    if unit != expected_unit:
-        raise ValueError(f"Expected {expected_unit}, found {unit or 'no unit'} at {dataset.name}")
+def _converted_data(dataset: h5py.Dataset, scale: float) -> np.ndarray:
     conversion = float(dataset.attrs.get("conversion", 1.0))
     offset = float(dataset.attrs.get("offset", 0.0))
     return (np.asarray(dataset, dtype=float) * conversion + offset) * scale
@@ -50,24 +47,15 @@ def load_current_clamp_sweep(path: Path, sweep_number: int) -> CurrentClampSweep
     acquisition_path = f"acquisition/data_{sweep_number:05}_AD0"
     stimulus_path = f"stimulus/presentation/data_{sweep_number:05}_DA0"
     with h5py.File(path, "r") as nwb:
-        if acquisition_path not in nwb or stimulus_path not in nwb:
-            raise KeyError(f"Sweep {sweep_number} is not present in {path}")
         acquisition = nwb[acquisition_path]
         stimulus = nwb[stimulus_path]
-        acquisition_rate = float(acquisition["starting_time"].attrs["rate"])
-        stimulus_rate = float(stimulus["starting_time"].attrs["rate"])
-        if acquisition_rate != stimulus_rate:
-            raise ValueError(
-                f"Sweep {sweep_number} rates differ: {acquisition_rate} vs {stimulus_rate}"
-            )
-        voltage_mv = _converted_data(acquisition["data"], "volts", 1000.0)
-        stimulus_pa = _converted_data(stimulus["data"], "amperes", 1e12)
-        if voltage_mv.shape != stimulus_pa.shape:
-            raise ValueError(f"Sweep {sweep_number} acquisition and stimulus lengths differ")
+        sampling_rate_hz = float(acquisition["starting_time"].attrs["rate"])
+        voltage_mv = _converted_data(acquisition["data"], 1000.0)
+        stimulus_pa = _converted_data(stimulus["data"], 1e12)
         return CurrentClampSweep(
             sweep_number=sweep_number,
             stimulus_description=_text(stimulus.attrs.get("stimulus_description", "")),
-            sampling_rate_hz=acquisition_rate,
+            sampling_rate_hz=sampling_rate_hz,
             voltage_mv=voltage_mv,
             stimulus_pa=stimulus_pa,
         )

@@ -8,8 +8,8 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from .nwb_sweeps import CurrentClampSweep, list_current_clamp_sweeps, load_current_clamp_sweep
-from .spike_waveforms import detect_efel_peak_times, infer_main_stimulus_pulse
+from ephys import CurrentClampSweep, list_current_clamp_sweeps, load_current_clamp_sweep
+from spikes import detect_efel_peak_times, infer_main_stimulus_pulse
 
 SUPRA_OFFSET_MV = 120.0
 
