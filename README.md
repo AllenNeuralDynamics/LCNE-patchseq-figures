@@ -130,17 +130,6 @@ Every non-cache output is written to `/results`:
 | `S14jk_spike_recomputation_provenance.csv` | DANDI asset, selected sweep, stimulus amplitude, and spike count for every cell |
 | `S14_projection_target_statistics.json` | Group summaries and exact Welch test statistics, degrees of freedom, p-values, and manuscript thresholds |
 
-## Known limitations
-
-- DANDIset 001893 currently has only a draft version. The committed manifest
-	pins the immutable blob URLs used here; it should be updated to a published
-	DANDI version before the final capsule release.
-- The raw NWBs do not include the legacy sidecar `passed` sweep-QC field. For
-	`ephys_roi_id` 1390679794, the NWB-only selector chooses sweep 48 while the
-	historical sidecar excluded that sweep and selected sweep 75.
-- Membrane time constants are frozen IPFX-derived inputs and are missing for 14
-	cells, as described above.
-
 ## Tests and environment
 
 All direct third-party dependencies are pinned in
