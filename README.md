@@ -83,9 +83,7 @@ It processes cells concurrently and performs the following steps:
 	 [`write_projection_statistics`](code/generate_S14jk.py) recomputes the four
 	 manuscript contrasts for spike PC1 and membrane time constant. It uses the
 	 original source-code method: two-sided Welch independent-samples t-tests
-	 (`scipy.stats.ttest_ind(..., equal_var=False)`) at the cell level. The
-	 manuscript describes these as paired tests, but the source implementation
-	 and unequal group sizes show that the tests are independent-samples tests.
+	 (`scipy.stats.ttest_ind(..., equal_var=False)`) at the cell level.
 
 ## Reproducible run
 

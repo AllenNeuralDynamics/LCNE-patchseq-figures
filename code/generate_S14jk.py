@@ -168,10 +168,6 @@ def write_projection_statistics(frame: pd.DataFrame, output_dir: Path) -> Path:
         "test": "Welch independent two-sample t-test",
         "alternative": "two-sided",
         "unit_of_analysis": "cell",
-        "note": (
-            "The manuscript says paired t-tests, but the source analysis used "
-            "scipy.stats.ttest_ind(equal_var=False); projection groups also have unequal sizes."
-        ),
         "tests": tests,
     }
     path = output_dir / "S14_projection_target_statistics.json"
