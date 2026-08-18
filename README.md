@@ -1,10 +1,10 @@
 # LCNE patch-seq figures
 
-This repository is the GitHub source for a Code Ocean capsule that reproduces
+This repository is the GitHub source for a Code Ocean capsule that creates
 supplementary figure S14j/k from the publication
 [Topographic structure and function of locus coeruleus norepinephrine neurons](https://doi.org/10.64898/2026.04.10.717727)
 (Su et al., 2026). The analysis downloads intracellular electrophysiology
-recordings from DANDI, recomputes the action-potential waveform PC1, restores
+recordings from DANDI, computes the action-potential waveform PC1 and
 the example current-clamp traces in panel j, and writes the figure and all
 supporting data to `/results`.
 
@@ -15,8 +15,8 @@ supporting data to `/results`.
 | [Figures repository](https://github.com/AllenNeuralDynamics/LCNE-patchseq-figures) | This capsule's code, environment, metadata, and frozen inputs |
 | [Code Ocean capsule](https://codeocean.allenneuraldynamics.org/capsule/9190472/tree) | Reproducible environment and run interface for figure S14j/k |
 | [DANDIset 001893](https://dandiarchive.org/dandiset/001893/) | Raw intracellular current-clamp NWB recordings |
-| [NeMO collection](https://assets.nemoarchive.org/col-p9d5w39) | Associated publication data collection |
-| [Analysis repository](https://github.com/AllenNeuralDynamics/LCNE-patchseq-analysis) | Original multimodal analysis and metadata-export code |
+| [NeMO collection](https://assets.nemoarchive.org/col-p9d5w39) | Associated transcriptomic data collection (not used for manuscript figures) |
+| [Analysis repository](https://github.com/AllenNeuralDynamics/LCNE-patchseq-analysis) | Full multimodal analysis code (for exploratio beyond manuscript figures)|
 
 ## Inputs
 
@@ -27,8 +27,6 @@ intracellular current-clamp voltage recordings and injected-current stimuli for
 one `ephys_roi_id`. Recordings are sampled at 50 kHz. The exact DANDI asset ID,
 path, immutable blob URL, size, and SHA-256 value for every cell are frozen in
 [`code/data/dandi_001893_manifest.csv`](code/data/dandi_001893_manifest.csv).
-The current DANDIset version is a draft; the committed manifest fixes the input
-assets used by this capsule.
 
 [`code/dandi.py`](code/dandi.py) reads the manifest and downloads or reuses the
 NWB files in `/scratch/lcne-patchseq-nwb`. [`code/ephys.py`](code/ephys.py)
@@ -40,10 +38,6 @@ their NWB unit conversions.
 [`code/data/LCNE_patchseq_S14_cell_table.csv`](code/data/LCNE_patchseq_S14_cell_table.csv)
 contains one row per publication cell with its donor, projection target,
 slicing plane, identifiers, membrane time constant, and S14j example-cell flag.
-It deliberately does **not** contain `spike_waveform_PC1`; every run recomputes
-that column from the raw NWBs. The table was exported from the analysis behind
-the publication in
-[LCNE-patchseq-analysis](https://github.com/AllenNeuralDynamics/LCNE-patchseq-analysis).
 
 `membrane_time_constant_ms` is a frozen intermediate value from the original
 IPFX analysis (`ipfx_tau` converted from seconds to milliseconds), rather than
@@ -73,16 +67,15 @@ It processes cells concurrently and performs the following steps:
 	 is used for every downstream S14k file and plot.
 
 3. **S14j example traces.**
-	 [`extract_example_traces`](code/example_traces.py) reconstructs the published
+	 [`extract_example_traces`](code/example_traces.py) plots the
 	 Isocortex (`1388239233`), Cerebellum (`1426757704`), and Spinal cord
 	 (`1410640556`) examples. For each cell it selects the minimum-amplitude
 	 spiking suprathreshold and rheobase long-square sweeps and the
 	 maximum-amplitude hyperpolarizing subthreshold sweep.
 
 4. **Projection-target statistics.**
-	 [`write_projection_statistics`](code/generate_S14jk.py) recomputes the four
-	 manuscript contrasts for spike PC1 and membrane time constant. It uses the
-	 original source-code method: two-sided Welch independent-samples t-tests
+	 [`write_projection_statistics`](code/generate_S14jk.py) computes the four
+	  contrasts for spike PC1 and membrane time constant. It uses the two-sided Welch independent-samples t-tests
 	 (`scipy.stats.ttest_ind(..., equal_var=False)`) at the cell level.
 
 ## Reproducible run
