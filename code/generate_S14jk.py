@@ -18,7 +18,7 @@ import numpy as np
 import pandas as pd
 from scipy.stats import ttest_ind
 
-from dandi_assets import load_assets, open_nwb
+from dandi_assets import load_assets, load_donors, open_nwb
 from example_traces import (
     EXAMPLE_CELLS,
     SUPRA_OFFSET_MV,
@@ -35,12 +35,7 @@ DEFAULT_INPUT = ROOT / "data" / "LCNE_patchseq_S14_cell_table.csv"
 DEFAULT_OUTPUT = ROOT.parent / "results"
 DEFAULT_WORKERS = min(8, os.cpu_count() or 1)
 
-REQUIRED_COLUMNS = {
-    "ephys_roi_id",
-    "Donor",
-    "projection_target",
-    "membrane_time_constant_ms",
-}
+REQUIRED_COLUMNS = {"ephys_roi_id", "membrane_time_constant_ms"}
 
 GROUPS = (
     ("Spinal cord", "#f2b705"),
@@ -75,19 +70,24 @@ MANUSCRIPT_TESTS = (
 )
 
 
-def load_frozen_table(path: Path) -> pd.DataFrame:
-    """Load and validate the frozen per-cell publication table."""
-    frame = pd.read_csv(path)
+def load_cell_table(path: Path, donors: pd.DataFrame) -> pd.DataFrame:
+    """Join the frozen membrane time constants with donor metadata from DANDI."""
+    frame = pd.read_csv(path, dtype={"ephys_roi_id": str})
     missing = sorted(REQUIRED_COLUMNS.difference(frame.columns))
     if missing:
         raise ValueError(f"Missing required columns: {', '.join(missing)}")
 
-    unknown_groups = sorted(set(frame["projection_target"].dropna()) - {g[0] for g in GROUPS})
+    frame = frame[sorted(REQUIRED_COLUMNS)].merge(
+        donors, on="ephys_roi_id", how="left", validate="one_to_one"
+    )
+    unmatched = frame.loc[frame["projection_target"].isna(), "ephys_roi_id"]
+    if len(unmatched):
+        raise ValueError(f"No DANDI donor for: {', '.join(unmatched)}")
+
+    unknown_groups = sorted(set(frame["projection_target"]) - {g[0] for g in GROUPS})
     if unknown_groups:
         raise ValueError(f"Unexpected projection targets: {', '.join(unknown_groups)}")
 
-    frame = frame.copy()
-    frame["ephys_roi_id"] = frame["ephys_roi_id"].astype(str)
     frame["membrane_time_constant_ms"] = pd.to_numeric(
         frame["membrane_time_constant_ms"], errors="raise"
     )
@@ -101,9 +101,8 @@ def _extract_cell(task):
     return ephys_roi_id, spike
 
 
-def recompute_features(frame: pd.DataFrame, workers: int):
+def recompute_features(frame: pd.DataFrame, assets, workers: int):
     ephys_roi_ids = frame["ephys_roi_id"].tolist()
-    assets = load_assets(ephys_roi_ids)
     tasks = [(ephys_roi_id, assets[ephys_roi_id]) for ephys_roi_id in ephys_roi_ids]
     with ProcessPoolExecutor(max_workers=workers) as pool:
         representatives = dict(pool.map(_extract_cell, tasks))
@@ -342,7 +341,7 @@ def generate_figure(
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--input", type=Path, default=DEFAULT_INPUT, help="Frozen CSV path")
+    parser.add_argument("--input", type=Path, default=DEFAULT_INPUT, help="CSV with ephys_roi_id and membrane_time_constant_ms")
     parser.add_argument("--output-dir", type=Path, default=DEFAULT_OUTPUT, help="Output directory")
     parser.add_argument("--workers", type=int, default=DEFAULT_WORKERS, help="Parallel workers")
     return parser.parse_args()
@@ -352,8 +351,9 @@ def main() -> None:
     logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
     args = parse_args()
     args.output_dir.mkdir(parents=True, exist_ok=True)
-    frame = load_frozen_table(args.input)
-    frame, provenance, waveforms = recompute_features(frame, args.workers)
+    assets = load_assets()
+    frame = load_cell_table(args.input, load_donors(assets))
+    frame, provenance, waveforms = recompute_features(frame, assets, args.workers)
     for filename, table in (
         ("S14jk_spike_recomputation_provenance.csv", provenance),
         ("S14jk_representative_spike_waveforms.csv", waveforms),
@@ -361,10 +361,9 @@ def main() -> None:
         path = args.output_dir / filename
         table.to_csv(path, index=filename.endswith("waveforms.csv"))
         LOGGER.info("Wrote %s", path)
-    example_assets = load_assets([cell.ephys_roi_id for cell in EXAMPLE_CELLS])
     example_trace_sets = {}
     for cell in EXAMPLE_CELLS:
-        with open_nwb(example_assets[cell.ephys_roi_id]) as nwb:
+        with open_nwb(assets[cell.ephys_roi_id]) as nwb:
             example_trace_sets[cell.ephys_roi_id] = extract_example_traces(nwb)
     trace_path = args.output_dir / "S14j_example_traces.csv"
     example_trace_frame(example_trace_sets).to_csv(trace_path, index=False)

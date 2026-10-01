@@ -7,17 +7,18 @@ import matplotlib.image as mpimg
 import numpy as np
 import pandas as pd
 
+from dandi_assets import load_assets, load_donors
 from generate_S14jk import (
     DEFAULT_INPUT,
     generate_figure,
-    load_frozen_table,
+    load_cell_table,
     write_projection_statistics,
 )
 
 
 class GenerateS14Test(unittest.TestCase):
     def test_frozen_table_and_outputs(self):
-        frame = load_frozen_table(DEFAULT_INPUT)
+        frame = load_cell_table(DEFAULT_INPUT, load_donors(load_assets()))
 
         self.assertEqual(len(frame), 96)
         self.assertEqual(
@@ -57,7 +58,7 @@ class GenerateS14Test(unittest.TestCase):
             path = Path(directory) / "bad.csv"
             pd.DataFrame({"ephys_roi_id": [1]}).to_csv(path, index=False)
             with self.assertRaisesRegex(ValueError, "Missing required columns"):
-                load_frozen_table(path)
+                load_cell_table(path, pd.DataFrame())
 
 
 if __name__ == "__main__":
