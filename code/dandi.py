@@ -1,13 +1,17 @@
-"""Download the raw NWBs listed in the frozen DANDI manifest."""
+"""Open the raw NWBs listed in the frozen DANDI manifest."""
 
 from __future__ import annotations
 
 import csv
+from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
-from urllib.request import urlretrieve
+from typing import BinaryIO, Iterator
+
+import remfile
 
 MANIFEST = Path(__file__).resolve().parent / "data" / "dandi_001893_manifest.csv"
+CACHE_DIR = Path("/scratch/lcne-patchseq-nwb")
 
 
 @dataclass(frozen=True)
@@ -37,17 +41,11 @@ def load_assets(ephys_roi_ids, manifest: Path = MANIFEST) -> dict[str, DandiAsse
     return {str(ephys_roi_id): assets[str(ephys_roi_id)] for ephys_roi_id in ephys_roi_ids}
 
 
-def download_nwb(asset: DandiAsset, cache_dir: Path) -> Path:
-    cache_dir.mkdir(parents=True, exist_ok=True)
-    destination = cache_dir / f"{asset.ephys_roi_id}.nwb"
-    if destination.exists() and destination.stat().st_size == asset.size:
-        return destination
-    temporary = destination.with_suffix(".nwb.part")
+@contextmanager
+def open_nwb(asset: DandiAsset) -> Iterator[BinaryIO]:
+    """Yield a seekable file-like object that range-reads the asset from S3; pass it to h5py.File."""
+    stream = remfile.File(asset.url, disk_cache=remfile.DiskCache(str(CACHE_DIR)))
     try:
-        urlretrieve(asset.url, temporary)
-        if temporary.stat().st_size != asset.size:
-            raise IOError(f"Incomplete download for {asset.ephys_roi_id}")
-        temporary.replace(destination)
+        yield stream
     finally:
-        temporary.unlink(missing_ok=True)
-    return destination
+        stream.close()

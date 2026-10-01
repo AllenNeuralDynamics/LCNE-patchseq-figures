@@ -1,3 +1,19 @@
 #!/usr/bin/env bash
 set -e
 
+
+# install updated version of code-server
+VERSION=4.133.0
+mkdir /.code-server
+cd /.code-server
+curl -fL "https://github.com/coder/code-server/releases/download/v$VERSION/code-server-$VERSION-linux-amd64.tar.gz" \
+  | tar -xz
+ln -s /.code-server/code-server-$VERSION-linux-amd64/bin/code-server  /usr/bin/code-server
+cd -
+
+
+mkdir -p /.vscode/extensions
+code-server --extensions-dir=/.vscode/extensions --install-extension ms-toolsai.jupyter 
+code-server --extensions-dir=/.vscode/extensions --install-extension ms-python.python 
+code-server --extensions-dir=/.vscode/extensions --install-extension meta.pyrefly
+code-server --extensions-dir=/.vscode/extensions --install-extension anthropic.claude-code

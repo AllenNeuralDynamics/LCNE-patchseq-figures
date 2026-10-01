@@ -1,7 +1,8 @@
 import csv
 import unittest
+from unittest import mock
 
-from dandi import MANIFEST, load_assets
+from dandi import MANIFEST, load_assets, open_nwb
 
 
 class ResolveNWBAssetsTest(unittest.TestCase):
@@ -18,6 +19,16 @@ class ResolveNWBAssetsTest(unittest.TestCase):
             resolved["1388239233"].sha256,
             "55609608e1736f8f2f4e459663e83f3b01faf969cd20bdec0ee0e3929416b8fa",
         )
+
+
+class OpenNWBTest(unittest.TestCase):
+    def test_streams_asset_url_and_closes(self):
+        asset = load_assets(["1388239233"])["1388239233"]
+        with mock.patch("dandi.remfile.File") as remote_file, mock.patch("dandi.remfile.DiskCache") as cache:
+            with open_nwb(asset) as stream:
+                remote_file.assert_called_once_with(asset.url, disk_cache=cache.return_value)
+                self.assertIs(stream, remote_file.return_value)
+            stream.close.assert_called_once_with()
 
 
 if __name__ == "__main__":

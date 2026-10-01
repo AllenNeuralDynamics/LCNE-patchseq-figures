@@ -18,7 +18,7 @@ import numpy as np
 import pandas as pd
 from scipy.stats import ttest_ind
 
-from dandi import download_nwb, load_assets
+from dandi import load_assets, open_nwb
 from example_traces import (
     EXAMPLE_CELLS,
     SUPRA_OFFSET_MV,
@@ -33,7 +33,6 @@ LOGGER = logging.getLogger(__name__)
 ROOT = Path(__file__).resolve().parent
 DEFAULT_INPUT = ROOT / "data" / "LCNE_patchseq_S14_cell_table.csv"
 DEFAULT_OUTPUT = ROOT.parent / "results"
-DEFAULT_CACHE = Path(os.environ.get("DANDI_NWB_CACHE", "/scratch/lcne-patchseq-nwb"))
 DEFAULT_WORKERS = min(8, os.cpu_count() or 1)
 
 REQUIRED_COLUMNS = {
@@ -96,15 +95,16 @@ def load_frozen_table(path: Path) -> pd.DataFrame:
 
 
 def _extract_cell(task):
-    ephys_roi_id, asset, cache_dir = task
-    spike = extract_representative_spike(download_nwb(asset, cache_dir))
+    ephys_roi_id, asset = task
+    with open_nwb(asset) as nwb:
+        spike = extract_representative_spike(nwb)
     return ephys_roi_id, spike
 
 
-def recompute_features(frame: pd.DataFrame, cache_dir: Path, workers: int):
+def recompute_features(frame: pd.DataFrame, workers: int):
     ephys_roi_ids = frame["ephys_roi_id"].tolist()
     assets = load_assets(ephys_roi_ids)
-    tasks = [(ephys_roi_id, assets[ephys_roi_id], cache_dir) for ephys_roi_id in ephys_roi_ids]
+    tasks = [(ephys_roi_id, assets[ephys_roi_id]) for ephys_roi_id in ephys_roi_ids]
     with ProcessPoolExecutor(max_workers=workers) as pool:
         representatives = dict(pool.map(_extract_cell, tasks))
 
@@ -344,7 +344,6 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--input", type=Path, default=DEFAULT_INPUT, help="Frozen CSV path")
     parser.add_argument("--output-dir", type=Path, default=DEFAULT_OUTPUT, help="Output directory")
-    parser.add_argument("--cache-dir", type=Path, default=DEFAULT_CACHE, help="NWB cache directory")
     parser.add_argument("--workers", type=int, default=DEFAULT_WORKERS, help="Parallel workers")
     return parser.parse_args()
 
@@ -354,7 +353,7 @@ def main() -> None:
     args = parse_args()
     args.output_dir.mkdir(parents=True, exist_ok=True)
     frame = load_frozen_table(args.input)
-    frame, provenance, waveforms = recompute_features(frame, args.cache_dir, args.workers)
+    frame, provenance, waveforms = recompute_features(frame, args.workers)
     for filename, table in (
         ("S14jk_spike_recomputation_provenance.csv", provenance),
         ("S14jk_representative_spike_waveforms.csv", waveforms),
@@ -362,10 +361,11 @@ def main() -> None:
         path = args.output_dir / filename
         table.to_csv(path, index=filename.endswith("waveforms.csv"))
         LOGGER.info("Wrote %s", path)
-    example_trace_sets = {
-        cell.ephys_roi_id: extract_example_traces(args.cache_dir / f"{cell.ephys_roi_id}.nwb")
-        for cell in EXAMPLE_CELLS
-    }
+    example_assets = load_assets([cell.ephys_roi_id for cell in EXAMPLE_CELLS])
+    example_trace_sets = {}
+    for cell in EXAMPLE_CELLS:
+        with open_nwb(example_assets[cell.ephys_roi_id]) as nwb:
+            example_trace_sets[cell.ephys_roi_id] = extract_example_traces(nwb)
     trace_path = args.output_dir / "S14j_example_traces.csv"
     example_trace_frame(example_trace_sets).to_csv(trace_path, index=False)
     LOGGER.info("Wrote %s", trace_path)

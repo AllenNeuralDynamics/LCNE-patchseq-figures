@@ -4,9 +4,12 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
+from typing import BinaryIO
 
 import h5py
 import numpy as np
+
+NwbSource = Path | BinaryIO
 
 
 @dataclass(frozen=True)
@@ -30,7 +33,7 @@ def _converted_data(dataset: h5py.Dataset, scale: float) -> np.ndarray:
     return (np.asarray(dataset, dtype=float) * conversion + offset) * scale
 
 
-def list_current_clamp_sweeps(path: Path) -> dict[int, str]:
+def list_current_clamp_sweeps(path: NwbSource) -> dict[int, str]:
     """Return sweep numbers and descriptions for current-clamp recordings."""
     sweeps = {}
     with h5py.File(path, "r") as nwb:
@@ -42,7 +45,7 @@ def list_current_clamp_sweeps(path: Path) -> dict[int, str]:
     return sweeps
 
 
-def load_current_clamp_sweep(path: Path, sweep_number: int) -> CurrentClampSweep:
+def load_current_clamp_sweep(path: NwbSource, sweep_number: int) -> CurrentClampSweep:
     """Load and convert one paired acquisition/stimulus sweep."""
     acquisition_path = f"acquisition/data_{sweep_number:05}_AD0"
     stimulus_path = f"stimulus/presentation/data_{sweep_number:05}_DA0"
