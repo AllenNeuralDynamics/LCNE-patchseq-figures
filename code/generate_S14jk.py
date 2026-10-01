@@ -18,7 +18,7 @@ import numpy as np
 import pandas as pd
 from scipy.stats import ttest_ind
 
-from dandi import load_assets, open_nwb
+from dandi_assets import load_assets, open_nwb
 from example_traces import (
     EXAMPLE_CELLS,
     SUPRA_OFFSET_MV,
@@ -116,10 +116,10 @@ def recompute_features(frame: pd.DataFrame, workers: int):
         provenance.append(
             {
                 "ephys_roi_id": ephys_roi_id,
-                "dandi_asset_id": asset.asset_id,
+                "dandi_asset_id": asset.identifier,
                 "dandi_asset_path": asset.path,
                 "dandi_asset_size_bytes": asset.size,
-                "dandi_asset_sha256": asset.sha256,
+                "dandi_asset_sha256": asset.get_raw_digest("dandi:sha2-256"),
                 "selected_sweep_number": spike.sweep_number,
                 "stimulus_amplitude_pa": spike.stimulus_amplitude_pa,
                 "spike_count": len(spike.peak_indices),

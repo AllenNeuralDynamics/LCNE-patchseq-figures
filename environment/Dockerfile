@@ -7,10 +7,12 @@ ARG GIT_ASKPASS
 COPY git-ask-pass /
 
 RUN pip install -U --no-cache-dir \
+    dandi==0.81.0 \
     h5py==3.16.0 \
     matplotlib==3.10.9 \
     numpy==2.2.6 \
     pandas==2.3.3 \
+    remfile==0.1.15 \
     scipy==1.15.3
 
 COPY postInstall /
