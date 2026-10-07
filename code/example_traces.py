@@ -3,12 +3,16 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from pathlib import Path
 
 import numpy as np
 import pandas as pd
 
-from ephys import CurrentClampSweep, list_current_clamp_sweeps, load_current_clamp_sweep
+from ephys import (
+    CurrentClampSweep,
+    NwbSource,
+    list_current_clamp_sweeps,
+    load_current_clamp_sweep,
+)
 from spikes import detect_efel_peak_times, infer_main_stimulus_pulse
 
 SUPRA_OFFSET_MV = 120.0
@@ -70,7 +74,7 @@ def _extract_peri_stimulus_trace(
     )
 
 
-def extract_example_traces(path: Path) -> dict[str, ExampleTrace]:
+def extract_example_traces(path: NwbSource) -> dict[str, ExampleTrace]:
     """Select and extract the legacy supra/rheo/hyperpolarizing sweeps."""
     candidates = []
     relevant_labels = set(STIMULUS_LABELS.values())

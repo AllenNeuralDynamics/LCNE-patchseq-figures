@@ -3,12 +3,16 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from pathlib import Path
 
 import numpy as np
 import pandas as pd
 
-from ephys import CurrentClampSweep, list_current_clamp_sweeps, load_current_clamp_sweep
+from ephys import (
+    CurrentClampSweep,
+    NwbSource,
+    list_current_clamp_sweeps,
+    load_current_clamp_sweep,
+)
 
 LONG_SQUARE_RHEO_LABELS = ("X3LP_Rheo_DA_0", "X5LP_Rheo_DA_0")
 SPIKE_THRESHOLD_MV = -10.0
@@ -123,7 +127,7 @@ def _candidate_rheobase_sweep(sweep: CurrentClampSweep) -> tuple[StimulusPulse, 
     return pulse, peak_times_ms
 
 
-def extract_representative_spike(path: Path) -> RepresentativeSpike:
+def extract_representative_spike(path: NwbSource) -> RepresentativeSpike:
     """Reproduce the legacy ``long_square_rheo, min`` average waveform."""
     candidates = []
     for sweep_number, description in sorted(list_current_clamp_sweeps(path).items()):

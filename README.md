@@ -24,20 +24,21 @@ supporting data to `/results`.
 
 The primary input is 96 NWB files from DANDIset 001893. Each file contains
 intracellular current-clamp voltage recordings and injected-current stimuli for
-one `ephys_roi_id`. Recordings are sampled at 50 kHz. The exact DANDI asset ID,
-path, immutable blob URL, size, and SHA-256 value for every cell are frozen in
-[`code/data/dandi_001893_manifest.csv`](code/data/dandi_001893_manifest.csv).
+one `ephys_roi_id`. Recordings are sampled at 50 kHz. The assets are resolved
+through the DANDI API from the pinned dandiset version `0.260817.1647`.
 
-[`code/dandi.py`](code/dandi.py) reads the manifest and downloads or reuses the
-NWB files in `/scratch/lcne-patchseq-nwb`. [`code/ephys.py`](code/ephys.py)
+[`code/dandi_assets.py`](code/dandi_assets.py) lists the assets and range-reads
+them from S3 with `remfile`, caching chunks in `/scratch/lcne-patchseq-nwb`.
+[`code/ephys.py`](code/ephys.py)
 loads the current-clamp acquisition and stimulus arrays with `h5py` and applies
 their NWB unit conversions.
 
 ### Cell metadata
 
+The donor and projection target for each cell come from the dandiset's
+`participants.tsv` (`donor_local_id` and `injection_target_region`).
 [`code/data/LCNE_patchseq_S14_cell_table.csv`](code/data/LCNE_patchseq_S14_cell_table.csv)
-contains one row per publication cell with its donor, projection target,
-slicing plane, identifiers, membrane time constant, and S14j example-cell flag.
+supplies only `membrane_time_constant_ms`, keyed by `ephys_roi_id`.
 
 `membrane_time_constant_ms` is a frozen intermediate value from the original
 IPFX analysis (`ipfx_tau` converted from seconds to milliseconds), rather than
@@ -81,8 +82,8 @@ It processes cells concurrently and performs the following steps:
 ## Reproducible run
 
 In the [Code Ocean capsule](https://codeocean.allenneuraldynamics.org/capsule/9190472/tree),
-**Reproducible Run** executes [`code/run`](code/run). The run downloads or
-reuses all 96 NWBs, computes cells in parallel, and writes to `/results`. In the
+**Reproducible Run** executes [`code/run`](code/run). The run streams
+all 96 NWBs from DANDI, computes cells in parallel, and writes to `/results`. In the
 Reproducible Run arguments field, use `--workers 4` to choose four worker
 processes. The default is the smaller of eight workers or the available CPU
 count; choosing more workers than available CPUs is not useful.
@@ -99,12 +100,11 @@ The Python entry point additionally accepts custom paths:
 python code/generate_S14jk.py \
 		--input code/data/LCNE_patchseq_S14_cell_table.csv \
 		--output-dir results \
-		--cache-dir /scratch/lcne-patchseq-nwb \
 		--workers 4
 ```
 
-The first run downloads approximately 5.67 GB. Later runs reuse NWBs whose
-cached file size matches the frozen manifest.
+The first run reads the NWB data over the network; later runs reuse the chunks
+cached in `/scratch/lcne-patchseq-nwb`.
 
 ## Outputs
 
@@ -113,7 +113,7 @@ Every non-cache output is written to `/results`:
 | File | Description |
 | --- | --- |
 | `S14jk.png`, `S14jk.svg` | Combined supplementary figure S14j/k |
-| `LCNE_patchseq_S14_cell_table.csv` | Input cell metadata plus the newly computed `spike_waveform_PC1` |
+| `LCNE_patchseq_S14_cell_table.csv` | Per-cell donor, projection target, membrane time constant, and the newly computed `spike_waveform_PC1` |
 | `S14j_example_traces.csv` | Long-form time and voltage data for the nine example traces in panel j |
 | `S14jk_PC1_raw.csv` | Per-cell PC1 values used in panel k |
 | `S14jk_PC1_cumulative.csv` | Sorted PC1 values and cumulative fractions by projection target |
@@ -135,9 +135,9 @@ PYTHONPATH=code python -m unittest discover -s tests -v
 ## Repository layout
 
 - `code/`: capsule entry point and analysis helpers
-- `code/data/`: frozen cell metadata and DANDI asset manifest
+- `code/data/`: frozen cell table (membrane time constants)
 - `environment/`: pinned Code Ocean container definition
 - `metadata/`: capsule name, description, and author
-- `tests/`: focused unit tests for manifest loading, NWB conversion, spike
+- `tests/`: focused unit tests for DANDI asset resolution, NWB conversion, spike
 	extraction, PCA, S14j sweep selection, figure exports, and statistics
 - `LICENSE`: MIT license
